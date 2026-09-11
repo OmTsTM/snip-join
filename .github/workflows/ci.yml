@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # The renderer carries no Windows dependency, so it runs on the cheaper and
+  # faster image. Anything that needs FFmpeg or the WebView belongs below.
+  renderer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Every locale is typed against the English catalogue, so a missing key
+      # already fails the type check. These two defects do not fail anything:
+      # a placeholder translated along with its sentence reaches one language's
+      # users as a literal brace, and a key nothing asks for is carried and
+      # re-translated forever. Thirty dead keys had accumulated before the
+      # first audit.
+      - name: Message catalogues
+        run: node scripts/check-i18n.mjs
+
+      - name: Types
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+  # Windows only, and not merely by preference: the process spawner depends on
+  # CREATE_NO_WINDOW and the shell is built on WebView2.
+  backend:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      # The end-to-end tests drive real FFmpeg rather than asserting on the
+      # argument list, so the suite cannot run without one. Fetching the build
+      # that ships in the installer, rather than trusting whatever the image
+      # happens to carry, is also what keeps CI testing the same FFmpeg a user
+      # gets. The test binary lives under `target`, where none of the locator's
+      # bundled directories apply, so the copy is reached through PATH.
+      - name: Bundled FFmpeg
+        run: |
+          pnpm ffmpeg:fetch
+          "${{ github.workspace }}\src-tauri\bin" >> $env:GITHUB_PATH
+        working-directory: .
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test
+
+  # A dependency advisory is a defect like any other, and finding it at release
+  # time is finding it too late. Its own job on Linux: `cargo audit` reads
+  # Cargo.lock and never builds the crate, so it owes nothing to the platform
+  # the application targets, and keeping it off the Windows job means the slow
+  # one is not made slower.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Dependency audit
+        run: cargo audit
+        working-directory: src-tauri

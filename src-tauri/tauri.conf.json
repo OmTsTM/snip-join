@@ -1,0 +1,74 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Snip Join",
+  "version": "1.0.0",
+  "identifier": "com.snipjoin.app",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Snip Join",
+        "width": 1360,
+        "height": 860,
+        "minWidth": 1040,
+        "minHeight": 660,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": false,
+        "center": true,
+        "dragDropEnabled": true,
+        "theme": "Dark",
+        "backgroundColor": "#0C0A09"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": [],
+          "deny": []
+        }
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis",
+      "msi"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "copyright": "Snip Join",
+    "category": "Video",
+    "shortDescription": "Snip a stretch out of any video.",
+    "longDescription": "Snip Join removes a stretch from a video and joins what is left, or leaves a gap where the cut was. Blocks can be reordered on the timeline. Exports fast by copying streams, or re-encodes with optional upscaling.",
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": [
+          "English",
+          "PortugueseBR",
+          "Spanish",
+          "SimpChinese"
+        ],
+        "compression": "lzma"
+      }
+    },
+    "resources": [
+      "bin/*"
+    ]
+  }
+}

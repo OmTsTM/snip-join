@@ -1,0 +1,120 @@
+name: Release
+
+# Cutting a release is pushing a tag. Everything below is what would otherwise
+# have to be remembered and done by hand on somebody's laptop, which is how
+# releases end up built from a dirty tree — or, worse, from a checkout where
+# `src-tauri/bin` still holds last month's FFmpeg.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build and publish, e.g. v1.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The tag carries a leading "v" and the release name does not, so the
+      # list of releases reads as versions rather than as refs. The same
+      # number also names the portable archive, which the packer takes from
+      # package.json: a tag that disagrees with it would publish
+      # "Snip Join 1.1.0" containing "Snip Join_1.0.0_x64_portable.zip", so
+      # the disagreement fails here instead of shipping.
+      - name: Name the release
+        id: naming
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag || github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          $declared = (Get-Content package.json | ConvertFrom-Json).version
+          if ($version -ne $declared) {
+            throw "tag $tag does not match the version in package.json ($declared)"
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      # Fetched before the checks, not after: the bundle declares `bin/*` as a
+      # resource, so an empty directory here fails the packaging step late
+      # instead of the download failing early. The end-to-end tests then reach
+      # the same copy through PATH.
+      - name: Bundled FFmpeg
+        shell: pwsh
+        run: |
+          pnpm ffmpeg:fetch
+          "${{ github.workspace }}\src-tauri\bin" >> $env:GITHUB_PATH
+
+      - name: Message catalogues
+        run: node scripts/check-i18n.mjs
+
+      - name: Types
+        run: pnpm typecheck
+
+      - name: Renderer tests
+        run: pnpm test
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+        working-directory: src-tauri
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+        working-directory: src-tauri
+
+      - name: Backend tests
+        run: cargo test
+        working-directory: src-tauri
+
+      - name: Build the installers and publish the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.inputs.tag || github.ref_name }}
+          releaseName: Snip Join ${{ steps.naming.outputs.version }}
+          releaseBody: |
+            Windows installer, NSIS and MSI. FFmpeg is inside: nothing else has
+            to be installed and nothing has to be on PATH.
+
+            Cuts are copies by default — no decoding, no encoding, seconds
+            rather than minutes, and no graphics card required.
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: false
+
+      # Published alongside the installers: unzip and run, with the scratch
+      # space and the web view's own storage redirected into `data/` beside the
+      # executable so nothing reaches the user's profile or the registry.
+      - name: Attach the portable archive
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag || github.ref_name }}"
+          $version = "${{ steps.naming.outputs.version }}"
+          pnpm portable:pack
+          gh release upload $tag "src-tauri/target/release/bundle/portable/Snip Join_${version}_x64_portable.zip" --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

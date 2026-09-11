@@ -1,0 +1,236 @@
+@import 'tailwindcss';
+
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource-variable/instrument-sans';
+@import '@fontsource-variable/geist-mono';
+
+/*
+ * The palette is sampled from the logo artwork rather than invented, so the
+ * application and its mark cannot drift apart: #F9811E is the scissors, #F4E6D6
+ * is the "Join" lettering, #1B406B is the window at dusk, #090A0B is the matte
+ * the badge sits on.
+ *
+ * The one rule that carries the brand into the interface: orange means cutting
+ * and nothing else. Anything that removes, marks for removal, or is about to be
+ * cut is orange. Everything that joins, keeps or reassembles is paper or dusk.
+ * The logo splits its own wordmark exactly that way.
+ */
+@theme {
+  --color-ink: #090a0b;
+  --color-ink-deep: #050607;
+  --color-panel: #101316;
+  --color-raised: #171a1d;
+  --color-raised-hi: #1e2226;
+  --color-line: #23282d;
+  --color-line-bright: #323940;
+
+  --color-snip: #f9811e;
+  --color-snip-bright: #ffa24d;
+  --color-snip-deep: #c25f0c;
+
+  --color-dusk: #1b406b;
+  --color-dusk-lift: #5b87bc;
+
+  --color-paper: #f4e6d6;
+  --color-muted: #8d9299;
+  --color-faint: #5c6269;
+
+  --font-display: 'Bricolage Grotesque Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Instrument Sans Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Mono', monospace;
+
+  --radius-panel: 14px;
+  --radius-block: 8px;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body {
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+
+    /* A desktop editor is not a document: nothing here should be selectable by
+       dragging, which would otherwise fight every timeline gesture. */
+    user-select: none;
+    cursor: default;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  /* A visible ring only for keyboard navigation, never on a pointer press. */
+  :focus-visible {
+    outline: 2px solid var(--color-snip);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-snip) 35%, transparent);
+    color: var(--color-paper);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-line-bright);
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /*
+   * The application ground. A very faint grain keeps a large dark field from
+   * reading as a flat void, which is what makes most dark interfaces feel like
+   * a cheap theme rather than a made object. It is 2.5% opacity: felt, not seen.
+   */
+  .app-ground {
+    position: relative;
+    background:
+      radial-gradient(120% 80% at 50% -20%, #14181c 0%, var(--color-ink) 55%),
+      var(--color-ink);
+  }
+
+  .app-ground::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .panel {
+    background: var(--color-panel);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-panel);
+  }
+
+  /* Small uppercase section label. Letter-spaced so it reads as a label rather
+     than as shouted body text. */
+  .eyebrow {
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-faint);
+  }
+
+  .timecode {
+    font-family: var(--font-mono);
+    font-feature-settings: 'tnum' 1, 'zero' 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /*
+   * The knurled grab handle on a block. Diagonal ridges are a real affordance
+   * borrowed from physical controls: the texture says "this is where you hold
+   * it" without a label, which matters on a surface where dragging the body
+   * would mean something else.
+   */
+  .knurl {
+    background-image: repeating-linear-gradient(
+      115deg,
+      color-mix(in oklab, var(--color-paper) 22%, transparent) 0px,
+      color-mix(in oklab, var(--color-paper) 22%, transparent) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  }
+
+  /*
+   * A hole in the timeline. Hatching reads as absence in a way an empty area
+   * never can, and it uses dusk rather than orange because a hole is a result,
+   * not a pending cut.
+   */
+  .hatched {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      color-mix(in oklab, var(--color-dusk-lift) 18%, transparent) 0px,
+      color-mix(in oklab, var(--color-dusk-lift) 18%, transparent) 1px,
+      transparent 1px,
+      transparent 7px
+    );
+  }
+
+  /* The torn edge left where a block was cut, drawn as a zigzag mask. */
+  .torn-edge {
+    -webkit-mask-image: linear-gradient(to bottom, #000 0 100%);
+    mask-image: linear-gradient(to bottom, #000 0 100%);
+  }
+}
+
+@layer utilities {
+  .drag-region {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+}
+
+/*
+ * Motion is decoration for anyone who has asked the system to keep still. The
+ * interface stays fully functional without it: every animation here reports a
+ * state change that is also visible in the layout itself.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
