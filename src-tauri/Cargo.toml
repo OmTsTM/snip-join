@@ -8,9 +8,14 @@ rust-version = "1.77"
 default-run = "snipjoin"
 
 [lib]
-# The Tauri mobile tooling expects the app to live in a cdylib-capable library crate.
+# An rlib and nothing else: main.rs links it, and so does the end-to-end test
+# binary. The staticlib and cdylib the Tauri template adds are there for the
+# iOS and Android tooling, which a Windows-only application never invokes.
+# Building the cdylib also made every release link emit MSVC's "Creating
+# library ... and object ..." notice on stdout, which rustc now reports as a
+# warning under `linker_messages`.
 name = "snipjoin_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

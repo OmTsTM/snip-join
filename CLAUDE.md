@@ -187,6 +187,13 @@ media falls back to the ordinary locations rather than failing every write.
   error**. Derived collections belong in a `useMemo` inside the component, over
   inputs that only change when the edit does.
   `src/presentation/state/selectors.test.ts` guards this.
+- **The bundle identifier is the installer's upgrade identity.** Windows keys
+  the uninstall entry and the web view's data folder off
+  `tauri.conf.json identifier`, so changing it after a release makes the next
+  installer sit beside the old copy instead of replacing it, and resets
+  whatever `localStorage` held — the chosen language and the dock height. It
+  moved from `com.snipjoin.app` to `br.matteus.snipjoin` before the first
+  release, which was the last free moment; it does not move again.
 - **Never write the export over the source.** `paths::validate_output` refuses
   it; FFmpeg would truncate the file it is reading.
 
