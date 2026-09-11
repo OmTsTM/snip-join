@@ -39,7 +39,7 @@ export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => 
         alt=""
         width={20}
         height={20}
-        className="pointer-events-none shrink-0 rounded-full"
+        className="pointer-events-none shrink-0 rounded-[5px]"
       />
 
       <span className="pointer-events-none shrink-0 font-display text-[13px] font-semibold tracking-tight text-paper">

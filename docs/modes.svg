@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 330" width="880" height="330" role="img" aria-label="The same cut under both modes: joining closes the hole and shortens the video, keeping it leaves black and silence and preserves the length">
+  <defs>
+    <pattern id="condemned" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="8" height="8" fill="#3A1E0C"/>
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#F9811E" stroke-width="2" opacity="0.45"/>
+    </pattern>
+    <pattern id="hole" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="8" height="8" fill="#0E1724"/>
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#1B406B" stroke-width="2" opacity="0.9"/>
+    </pattern>
+    <style>
+      .l { font: 600 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; fill: #F4E6D6 }
+      .s { font: 400 11.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; fill: #8A97A8 }
+      .n { font: 600 11px ui-monospace, 'Cascadia Mono', Consolas, monospace; fill: #6F8199 }
+      .o { font: 600 11.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; fill: #F9811E }
+    </style>
+  </defs>
+
+  <rect width="880" height="330" fill="#090A0B"/>
+
+  <!-- Source -->
+  <text x="20" y="46" class="l">Source</text>
+  <text x="20" y="63" class="s">40 seconds</text>
+  <rect x="150" y="30" width="292" height="40" rx="4" fill="#24344A"/>
+  <rect x="442" y="30" width="146" height="40" rx="4" fill="url(#condemned)"/>
+  <rect x="588" y="30" width="242" height="40" rx="4" fill="#24344A"/>
+  <line x1="442" y1="22" x2="442" y2="78" stroke="#F9811E" stroke-width="2.5"/>
+  <line x1="588" y1="22" x2="588" y2="78" stroke="#F9811E" stroke-width="2.5"/>
+  <text x="515" y="95" class="o" text-anchor="middle">marked for removal · 8s</text>
+
+  <!-- Join -->
+  <text x="20" y="160" class="l">Join</text>
+  <text x="20" y="177" class="s">array order wins,</text>
+  <text x="20" y="192" class="s">start is derived</text>
+  <rect x="150" y="144" width="292" height="40" rx="4" fill="#24344A"/>
+  <rect x="442" y="144" width="242" height="40" rx="4" fill="#24344A"/>
+  <line x1="442" y1="140" x2="442" y2="188" stroke="#F9811E" stroke-width="1.6" stroke-dasharray="3 3"/>
+  <rect x="684" y="144" width="146" height="40" rx="4" fill="none" stroke="#2A323C" stroke-width="1" stroke-dasharray="5 4"/>
+  <text x="757" y="169" class="n" text-anchor="middle">gone</text>
+  <text x="150" y="212" class="s">The tail slides left onto the seam. 32 seconds out, and a stream copy can produce it.</text>
+
+  <!-- Gap -->
+  <text x="20" y="266" class="l">Gap</text>
+  <text x="20" y="283" class="s">start wins,</text>
+  <text x="20" y="298" class="s">the array is sorted by it</text>
+  <rect x="150" y="250" width="292" height="40" rx="4" fill="#24344A"/>
+  <rect x="442" y="250" width="146" height="40" rx="4" fill="url(#hole)"/>
+  <rect x="588" y="250" width="242" height="40" rx="4" fill="#24344A"/>
+  <text x="515" y="275" class="n" text-anchor="middle" fill="#7FA8D8">black · silent</text>
+  <text x="150" y="318" class="s">Nothing moves. Still 40 seconds, and the hole has to be drawn, so the export re-encodes.</text>
+</svg>

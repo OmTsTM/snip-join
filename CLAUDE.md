@@ -236,12 +236,31 @@ run an export, and assert on the resulting file's duration, colours at given
 timestamps, and that a hole is genuinely black and silent. Add a test there for
 anything that changes what comes out.
 
-## Icons
+## Artwork
 
-`src-tauri/icon-source.png` is the logo with the badge cropped to its orange ring
-and everything outside it made transparent, which is what keeps the taskbar icon
-from reading as a black square. Regenerate the set with
-`pnpm tauri icon src-tauri/icon-source.png`.
+`logo.png` is the only source. Everything else is rendered from it, so the
+window, the taskbar and the README cannot drift apart:
+
+```bash
+pnpm icons        # logo.png -> src-tauri/icon-source.png + the title bar mark
+pnpm tauri icon src-tauri/icon-source.png    # -> src-tauri/icons/
+pnpm banner       # -> docs/banner.png
+```
+
+Both generators need `pip install pillow fonttools brotli`; the banner reads the
+brand woff2 files out of `node_modules` and converts them in memory, because
+Pillow cannot open woff2.
+
+`make-icon-source.py` cuts the tile out of the logo and makes everything outside
+it transparent. That matters: the logo is artwork on a matte with a drop shadow,
+and handing the whole canvas to `tauri icon` is what makes a taskbar icon read as
+a black square. The crop bounds and the corner radius in that file were measured
+off the rim highlight on the tile's edge, so re-run it rather than adjusting the
+numbers by eye if the artwork changes.
+
+The screenshots in `docs/` are real captures of a release build, driven by
+keyboard and mouse, with a generated clip in the product's own palette as the
+footage. Nothing there is a mock-up.
 
 ## Requirements
 

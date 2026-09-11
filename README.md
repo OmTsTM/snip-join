@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="src-tauri/icons/128x128@2x.png" width="108" alt="Snip Join">
+  <img src="docs/banner.png" alt="Snip Join" width="100%">
 </p>
 
 <h1 align="center">Snip Join</h1>
 
 <p align="center">
-  <strong>Take a stretch out of a video. Join what is left, or leave the hole.</strong>
+  <strong>Cut a stretch out of any video in seconds. No decoding, no encoding, no waiting.</strong>
 </p>
 
 <p align="center">
@@ -21,6 +21,16 @@
 Most editors make you learn a timeline before you can delete thirty seconds from
 the middle of a recording. Snip Join does that one thing, and does it with the
 precision and finish of a paid tool.
+
+<p align="center">
+  <img src="docs/screenshot-selection.png" alt="Eight seconds marked for removal: two orange rails across the timeline, the in and out points and the length in the panel on the right" width="880">
+</p>
+
+<p align="center">
+  <em>Eight seconds marked. Both edges landed on 00:11.933 and 00:19.933 — not
+  round numbers, but the nearest cut points in this file, which is what lets the
+  export copy the stream instead of re-encoding it.</em>
+</p>
 
 ## Contents
 
@@ -42,6 +52,30 @@ goes. Press Remove.
 **Join, or don't.** With *Join the ends* on, what is left closes up into one
 continuous video. Turn it off and the hole stays exactly where it was — it
 exports as black with silence, and the video keeps its original length.
+
+<p align="center">
+  <img src="docs/modes.svg" alt="The same cut under both modes: joining slides the tail left and produces 32 seconds, keeping the hole leaves 40 seconds with a black and silent stretch in the middle" width="880">
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-joined.png" alt="After the removal with joining on: two blocks meeting at a torn orange seam, the video now 32 seconds long" width="880">
+</p>
+
+<p align="center">
+  <em>Joined. The two survivors meet at a torn edge — the mark for a seam you
+  made, as opposed to the clean edges the original file came with — and the
+  counter says 32s of 40s kept.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot-hole.png" alt="The same cut with joining off: a hole in the middle of the timeline and the preview reading Hole, black and silent here" width="880">
+</p>
+
+<p align="center">
+  <em>The same cut with joining off. Nothing moved, the video is still forty
+  seconds, and the playhead inside the hole previews exactly what will be
+  exported there.</em>
+</p>
 
 **Blocks.** The video starts as one block. Every cut splits it, and each piece is
 numbered in the order it plays. Grab a block by its ridged handle to move it:
@@ -71,6 +105,15 @@ confirms it in words: **"Exact cuts. Nothing is re-encoded."** — and if an edg
 did end up between two of them, it tells you how far it will move instead of
 letting you find out afterwards.
 
+<p align="center">
+  <img src="docs/screenshot-export.png" alt="The export dialog with Copy selected and the line Exact cuts, nothing is re-encoded" width="880">
+</p>
+
+<p align="center">
+  <em>Both edges are on cut points, so the dialog commits to it in words before
+  anything runs — and estimates about a second for a forty second file.</em>
+</p>
+
 If you need a cut on one specific frame rather than the nearest cut point, that
 is what **Precise** is for.
 
@@ -87,6 +130,10 @@ Three methods, and the difference is minutes of your time:
 Copy is unavailable when the timeline has a hole — a hole has to be drawn, and
 nothing can be drawn into a copied stream. The dialog says so rather than quietly
 taking four minutes over what you asked to take four seconds.
+
+<p align="center">
+  <img src="docs/screenshot-export-hole.png" alt="The same dialog with a hole on the timeline: Copy greyed out, Precise selected, and the line a hole cannot be copied so this export re-encodes" width="640">
+</p>
 
 ### Enhanced
 
