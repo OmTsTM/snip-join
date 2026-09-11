@@ -176,7 +176,7 @@ know nothing about FFmpeg and FFmpeg knows nothing about the window. The whole
 export routing decision is a pure function returning a list of commands, which is
 why it can be tested without encoding anything.
 
-Covered by 118 Rust unit tests, 8 end-to-end tests that drive real FFmpeg and
+Covered by 119 Rust unit tests, 8 end-to-end tests that drive real FFmpeg and
 assert on the resulting files, and 72 renderer tests. See
 [CLAUDE.md](CLAUDE.md) for the architecture and the traps.
 

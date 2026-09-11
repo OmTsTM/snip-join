@@ -8,10 +8,12 @@ use crate::domain::export::{EncoderBackend, UpscaleAlgorithm, VideoCodec};
 
 use super::{locator, runner};
 
-/// What this machine's FFmpeg build can actually do.
+/// What this machine can actually do.
 ///
-/// Probing costs two process launches, so it is done once and shared. Encoder
-/// availability cannot change while the app runs.
+/// Not what the build carries: the two are different, and confusing them is
+/// how an export reaches a user's machine and dies at the first frame. Probing
+/// costs a handful of process launches, so it is done once and shared. Nothing
+/// here can change while the app runs.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Capabilities {
@@ -44,13 +46,26 @@ async fn detect() -> AppResult<Capabilities> {
             .unwrap_or_default(),
     );
 
+    // Listed is not usable. Every build shipped here carries h264_nvenc, and on
+    // a machine with no NVIDIA card it fails with "Cannot load nvcuda.dll" only
+    // once the export is already running — which is exactly the argument the
+    // libplacebo probe below was written for, applied to the wrong half of the
+    // file. Four end-to-end tests died this way on a runner with no GPU.
+    //
+    // Concurrently, so three probes cost about what one does.
+    let (nvenc, quick_sync, amf) = tokio::join!(
+        encoder_opens(&tools.ffmpeg, &encoders, "h264_nvenc"),
+        encoder_opens(&tools.ffmpeg, &encoders, "h264_qsv"),
+        encoder_opens(&tools.ffmpeg, &encoders, "h264_amf"),
+    );
+
     let hardware_backends = [
-        (EncoderBackend::Nvenc, "h264_nvenc"),
-        (EncoderBackend::QuickSync, "h264_qsv"),
-        (EncoderBackend::Amf, "h264_amf"),
+        (EncoderBackend::Nvenc, nvenc),
+        (EncoderBackend::QuickSync, quick_sync),
+        (EncoderBackend::Amf, amf),
     ]
     .into_iter()
-    .filter(|(_, probe)| encoders.contains(*probe))
+    .filter(|(_, opens)| *opens)
     .map(|(backend, _)| backend)
     .collect();
 
@@ -80,6 +95,63 @@ async fn detect() -> AppResult<Capabilities> {
     );
 
     Ok(capabilities)
+}
+
+/// Encodes one frame to confirm the encoder opens on this machine.
+///
+/// 256x256 clears NVENC's minimum dimensions with room to spare and is even on
+/// both axes, and the pixel format is stated rather than negotiated, so a
+/// failure here means the encoder could not open and not that the probe asked
+/// for something odd.
+async fn encoder_opens(ffmpeg: &std::path::Path, encoders: &HashSet<String>, name: &str) -> bool {
+    if !encoders.contains(name) {
+        return false;
+    }
+
+    let args: Vec<String> = [
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=black:s=256x256:d=0.1",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:v",
+        name,
+        "-frames:v",
+        "1",
+        "-f",
+        "null",
+        "-",
+    ]
+    .iter()
+    .map(|a| a.to_string())
+    .collect();
+
+    let ok = runner::run_capturing_stdout(ffmpeg, &args).await.is_ok();
+    if !ok {
+        tracing::info!(encoder = name, "compiled into this build but it does not open here");
+    }
+    ok
+}
+
+/// The hardware backend an encoder name belongs to, if any.
+///
+/// Keyed on the suffix rather than on a table of names, so a codec added to the
+/// candidate lists cannot quietly escape the check.
+fn backend_of(encoder: &str) -> Option<EncoderBackend> {
+    if encoder.ends_with("_nvenc") {
+        Some(EncoderBackend::Nvenc)
+    } else if encoder.ends_with("_qsv") {
+        Some(EncoderBackend::QuickSync)
+    } else if encoder.ends_with("_amf") {
+        Some(EncoderBackend::Amf)
+    } else {
+        None
+    }
 }
 
 /// Renders one frame through libplacebo to confirm a usable Vulkan device.
@@ -132,10 +204,20 @@ impl Capabilities {
         self.encoders.iter().any(|e| e == name)
     }
 
+    /// Whether this machine can run the named encoder, as opposed to merely
+    /// carrying it.
+    ///
+    /// Software encoders are taken at their word; a hardware one counts only if
+    /// its backend opened during detection.
+    fn can_encode(&self, name: &str) -> bool {
+        self.has_encoder(name)
+            && backend_of(name).map_or(true, |backend| self.hardware_backends.contains(&backend))
+    }
+
     /// Resolves a requested backend to a concrete encoder name.
     ///
     /// `Auto` walks hardware first and falls back to software, so a machine
-    /// without a supported GPU still exports rather than failing. An explicitly
+    /// without a usable GPU still exports rather than failing. An explicitly
     /// requested backend that is unavailable also falls back, because refusing to
     /// export is a worse outcome than exporting a little slower.
     pub fn resolve_encoder(&self, codec: VideoCodec, backend: EncoderBackend) -> &'static str {
@@ -165,7 +247,7 @@ impl Capabilities {
             }
         };
 
-        candidates.iter().copied().find(|name| self.has_encoder(name)).unwrap_or("libx264")
+        candidates.iter().copied().find(|name| self.can_encode(name)).unwrap_or("libx264")
     }
 }
 
@@ -180,11 +262,19 @@ mod tests {
          V....D h264_nvenc           NVIDIA NVENC H.264 encoder\n\
          V..... libsvtav1            SVT-AV1 encoder\n";
 
+    /// Every hardware encoder in the listing is taken to open, which is the
+    /// machine these tests describe. The case where it does not is its own test.
     fn capabilities_with(encoders: &[&str], filters: &[&str]) -> Capabilities {
+        let hardware_backends =
+            [EncoderBackend::Nvenc, EncoderBackend::QuickSync, EncoderBackend::Amf]
+                .into_iter()
+                .filter(|backend| encoders.iter().any(|e| backend_of(e) == Some(*backend)))
+                .collect();
+
         Capabilities {
             encoders: encoders.iter().map(|s| s.to_string()).collect(),
             filters: filters.iter().map(|s| s.to_string()).collect(),
-            hardware_backends: vec![],
+            hardware_backends,
             upscalers: vec![],
         }
     }
@@ -213,6 +303,26 @@ mod tests {
     fn an_unavailable_explicit_backend_falls_back_rather_than_failing() {
         let caps = capabilities_with(&["libx265"], &[]);
         assert_eq!(caps.resolve_encoder(VideoCodec::Hevc, EncoderBackend::Nvenc), "libx265");
+    }
+
+    /// The defect a GPU-less CI runner found: the build lists h264_nvenc on
+    /// every machine, and picking it where nvcuda.dll cannot load fails the
+    /// export at the first frame, after the user has already waited.
+    #[test]
+    fn an_encoder_the_machine_cannot_open_is_never_chosen() {
+        let caps = Capabilities {
+            encoders: vec!["libx264".into(), "h264_nvenc".into()],
+            filters: vec![],
+            hardware_backends: vec![],
+            upscalers: vec![],
+        };
+
+        assert_eq!(caps.resolve_encoder(VideoCodec::H264, EncoderBackend::Auto), "libx264");
+        assert_eq!(
+            caps.resolve_encoder(VideoCodec::H264, EncoderBackend::Nvenc),
+            "libx264",
+            "an explicit request for a backend that does not work must still fall back"
+        );
     }
 
     #[test]

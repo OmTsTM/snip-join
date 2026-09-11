@@ -165,6 +165,13 @@ media falls back to the ordinary locations rather than failing every write.
 - **A stream copy cannot draw a hole.** `ExportSpec::reconciled()` promotes the
   mode when the timeline has one. The dialog shows this rather than letting the
   backend do it quietly.
+- **A listed encoder is not a working encoder.** Every FFmpeg build bundled
+  here carries `h264_nvenc`, so `-encoders` reports it on a machine with no
+  NVIDIA card and the export dies at the first frame with `Cannot load
+  nvcuda.dll`. `capabilities.rs` opens each hardware encoder on one throwaway
+  frame at startup, concurrently, and `resolve_encoder` picks only from what
+  actually opened. This also covered the scrubbing proxy, which asks for `Auto`
+  too.
 - **`libplacebo` needs a live Vulkan device**, not just the compiled-in filter.
   `capabilities.rs` renders one throwaway frame through it at startup and hides
   the GPU upscalers if that fails. Its `antiringing` option applies only to
@@ -204,7 +211,7 @@ pnpm app:dev -- -- path/to/video.mp4   # open a file at launch
 pnpm typecheck          # tsc, strict
 pnpm test               # renderer unit tests
 pnpm i18n:check         # placeholder parity across locales, and dead keys
-cd src-tauri && cargo test              # 118 unit + 8 end-to-end
+cd src-tauri && cargo test              # 119 unit + 8 end-to-end
 cd src-tauri && cargo clippy --all-targets
 cd src-tauri && cargo fmt --all         # rustfmt.toml sits at the repo root
 pnpm ffmpeg:fetch       # download the FFmpeg that gets bundled
