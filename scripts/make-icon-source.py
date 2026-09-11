@@ -24,6 +24,10 @@ TARGET = ROOT / "src-tauri" / "icon-source.png"
 # window and the taskbar cannot end up showing two different logos.
 BRAND_MARK = ROOT / "src" / "presentation" / "assets" / "brand-mark.png"
 BRAND_MARK_SIZE = 96
+# The splash window shows the tile at 84 CSS pixels, which is 168 physical ones
+# on a display scaled to 200%.
+BRAND_TILE = ROOT / "src" / "presentation" / "assets" / "brand-tile.png"
+BRAND_TILE_SIZE = 256
 
 # Left, top, right, bottom of the tile within logo.png.
 TILE = (89, 79, 1168, 1128)
@@ -60,6 +64,9 @@ def main() -> int:
 
     square.resize((BRAND_MARK_SIZE, BRAND_MARK_SIZE), Image.LANCZOS).save(BRAND_MARK)
     print(f"wrote {BRAND_MARK.relative_to(ROOT)} at {BRAND_MARK_SIZE}x{BRAND_MARK_SIZE}")
+
+    square.resize((BRAND_TILE_SIZE, BRAND_TILE_SIZE), Image.LANCZOS).save(BRAND_TILE)
+    print(f"wrote {BRAND_TILE.relative_to(ROOT)} at {BRAND_TILE_SIZE}x{BRAND_TILE_SIZE}")
     return 0
 
 

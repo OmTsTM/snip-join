@@ -35,6 +35,9 @@ export const en = {
   'transport.pause': 'Pause',
   'transport.previousFrame': 'Back one frame',
   'transport.nextFrame': 'Forward one frame',
+  'transport.volume': 'Volume',
+  'transport.mute': 'Mute',
+  'transport.unmute': 'Unmute',
   'transport.toStart': 'Go to start',
   'transport.toEnd': 'Go to end',
 
@@ -181,6 +184,9 @@ export const en = {
   'shortcuts.show': 'Keyboard shortcuts',
 
   'language.label': 'Language',
+
+  'about.author': 'by OmTsTM',
+  'splash.tagline': 'The cut you see is the cut you get.',
 } as const
 
 export type MessageKey = keyof typeof en

@@ -163,6 +163,24 @@ export const Check = (props: IconProps) => (
   </Icon>
 )
 
+/** Sound on. The cone and two arcs, at the same stroke weight as the rest. */
+export const Speaker = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" />
+    <path d="M16 9.2a4 4 0 0 1 0 5.6" />
+    <path d="M18.6 6.6a7.6 7.6 0 0 1 0 10.8" />
+  </Icon>
+)
+
+/** Sound off. The same cone, so the two read as one control changing state. */
+export const SpeakerOff = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4 9.5h3.2L12 5.5v13l-4.8-4H4z" />
+    <path d="M16.5 10 21 14.5" />
+    <path d="M21 10l-4.5 4.5" />
+  </Icon>
+)
+
 export const Alert = (props: IconProps) => (
   <Icon {...props}>
     <path d="M12 4.5 21 19.5H3z" />

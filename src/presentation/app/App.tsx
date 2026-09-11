@@ -37,6 +37,21 @@ export function App() {
   // reload cannot stack duplicate listeners.
   useEffect(() => connectBackendEvents(), [])
 
+  // The editor window is created hidden. Reporting in after the first paint is
+  // what makes it appear — two frames of margin, because a layout effect runs
+  // before the browser has put anything on screen and the window would show
+  // blank. The backend decides how much longer the splash is owed.
+  useEffect(() => {
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        void api.finishStartup().catch(() => {
+          // The deadline in the backend shows the window regardless.
+        })
+      })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [])
+
   // Shrinking the window can leave the dock taller than the stage can spare, so
   // the stored height is re-clamped against the new size.
   useEffect(() => {

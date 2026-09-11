@@ -148,6 +148,9 @@ export const api = {
 
   initialFile: () => call<string | null>('initial_file'),
 
+  /** Reports that the editor has painted, so the splash can be swapped for it. */
+  finishStartup: () => call<void>('finish_startup'),
+
   keyframes: () => call<KeyframeReport>('keyframe_positions'),
 } as const
 

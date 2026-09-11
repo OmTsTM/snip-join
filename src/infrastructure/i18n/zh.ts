@@ -29,6 +29,9 @@ export const zh: Catalogue = {
   'transport.pause': '暂停',
   'transport.previousFrame': '后退一帧',
   'transport.nextFrame': '前进一帧',
+  'transport.volume': '音量',
+  'transport.mute': '静音',
+  'transport.unmute': '取消静音',
   'transport.toStart': '回到开头',
   'transport.toEnd': '跳到结尾',
 
@@ -173,4 +176,7 @@ export const zh: Catalogue = {
   'shortcuts.show': '键盘快捷键',
 
   'language.label': '语言',
+
+  'about.author': '作者 OmTsTM',
+  'splash.tagline': '所见即所剪。',
 }

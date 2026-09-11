@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 
 import { Close } from '@presentation/components/Icons'
+import { AuthorLink } from './AuthorLink'
 import { IconButton } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
 import type { MessageKey } from '@infrastructure/i18n'
@@ -91,8 +92,12 @@ export function ShortcutsDialog({
               ))}
             </dl>
 
-            <footer className="border-t border-line px-5 py-3 text-[11px] text-faint">
-              {t('timeline.resize')}
+            <footer className="flex items-center justify-between gap-4 border-t border-line px-5 py-3 text-[11px] text-faint">
+              <span>{t('timeline.resize')}</span>
+              <span className="flex shrink-0 items-center gap-2">
+                <span className="timecode">{__APP_VERSION__}</span>
+                <AuthorLink />
+              </span>
             </footer>
           </motion.div>
         </motion.div>

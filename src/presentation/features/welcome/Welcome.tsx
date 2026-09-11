@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'motion/react'
 
 import { Button } from '@presentation/components/primitives'
 import { Folder } from '@presentation/components/Icons'
+import { AuthorLink } from '@presentation/features/chrome/AuthorLink'
 import { useOpenVideo } from '@presentation/features/chrome/OpenAnother'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { useEditor } from '@presentation/state/editorStore'
@@ -44,6 +45,10 @@ export function Welcome({ dropActive }: { readonly dropActive: boolean }) {
         </Button>
 
         <p className="mt-6 text-[11.5px] tracking-wide text-faint">{t('welcome.formats')}</p>
+
+        {/* Only on the welcome screen and in the shortcut sheet: a credit that
+            is reachable but never sits beside anything being edited. */}
+        <AuthorLink className="mt-7" />
       </motion.div>
 
       {/* The drop target is the whole window, so the cue covers it rather than

@@ -43,7 +43,11 @@ export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => 
       />
 
       <span className="pointer-events-none shrink-0 font-display text-[13px] font-semibold tracking-tight text-paper">
-        Snip<span className="text-snip">Join</span>
+        <span className="text-snip">Snip</span>Join
+      </span>
+
+      <span className="timecode pointer-events-none -ml-1.5 shrink-0 text-[10px] text-faint">
+        {__APP_VERSION__}
       </span>
 
       {source && (

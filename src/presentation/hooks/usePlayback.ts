@@ -29,6 +29,10 @@ export function usePlayback(video: RefObject<HTMLVideoElement | null>) {
   const playing = useEditor((state) => state.playing)
   const playhead = useEditor((state) => state.playhead)
   const timeline = useEditor(selectTimeline)
+  const volume = useEditor((state) => state.volume)
+  const muted = useEditor((state) => state.muted)
+  // Re-applied when the source changes: a fresh element starts at full volume.
+  const url = useEditor((state) => state.previewUrl)
   const rate = 1
 
   // The clock. Reads the latest state directly rather than through the closure,
@@ -86,6 +90,15 @@ export function usePlayback(video: RefObject<HTMLVideoElement | null>) {
       element.pause()
     }
   }, [video, timeline, playhead, playing])
+
+  // Loudness lives in the store rather than on the element, so it survives the
+  // element being replaced when a proxy finishes rendering behind the preview.
+  useEffect(() => {
+    const element = video.current
+    if (!element) return
+    element.volume = volume
+    element.muted = muted
+  }, [video, volume, muted, url])
 
   // Leaving the editor, or losing the source, must not leave audio playing.
   useEffect(() => {

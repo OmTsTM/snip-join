@@ -57,6 +57,20 @@ pub fn run() {
             if let Ok(resources) = app.path().resource_dir() {
                 infrastructure::ffmpeg::locator::use_bundled_dir(resources.join("bin"));
             }
+
+            // The splash is up already; from here the clock that decides how
+            // long it stays is running.
+            interface::splash::mark_shown();
+            interface::splash::arm_deadline(app.handle().clone());
+
+            // Alt-Tab and the taskbar read this, and a support question starts
+            // with which version is running. Taken from the package metadata
+            // rather than written into the config, so it cannot fall behind the
+            // installer's number.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_title(&format!("Snip Join {}", app.package_info().version));
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -79,6 +93,7 @@ pub fn run() {
             commands::cancel_job,
             commands::initial_file,
             commands::keyframe_positions,
+            commands::finish_startup,
         ])
         .run(tauri::generate_context!())
         .expect("the Snip Join window could not be created");

@@ -14,7 +14,17 @@ use super::dto::{
     ExportOutcome, ExportRequest, JobProgress, KeyframeReport, PreviewSource, ThumbnailDto,
 };
 use super::events;
+use super::splash;
 use super::startup;
+
+/// Reports that the editor is on screen and the splash can go.
+///
+/// The renderer decides when it is ready; how long the splash is owed on top of
+/// that is the splash module's business, not this command's.
+#[tauri::command]
+pub async fn finish_startup(app: AppHandle) {
+    splash::finish(app).await;
+}
 
 /// How many filmstrip frames may be requested at once.
 ///

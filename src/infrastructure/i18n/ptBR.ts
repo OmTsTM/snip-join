@@ -31,6 +31,9 @@ export const ptBR: Catalogue = {
   'transport.pause': 'Pausar',
   'transport.previousFrame': 'Um quadro atrás',
   'transport.nextFrame': 'Um quadro à frente',
+  'transport.volume': 'Volume',
+  'transport.mute': 'Silenciar',
+  'transport.unmute': 'Ativar o som',
   'transport.toStart': 'Ir para o início',
   'transport.toEnd': 'Ir para o fim',
 
@@ -49,7 +52,7 @@ export const ptBR: Catalogue = {
     'Transforma a seleção em um bloco próprio para você arrastar para outro lugar.',
   'selection.selectAll': 'Selecionar tudo',
 
-  'join.label': 'Juntar as pontas',
+  'join.label': 'Juntar as partes',
   'join.on': 'O que sobra se une em um vídeo contínuo.',
   'join.off': 'O buraco permanece. Ele sai preto e mudo na exportação.',
 
@@ -179,4 +182,7 @@ export const ptBR: Catalogue = {
   'shortcuts.show': 'Atalhos de teclado',
 
   'language.label': 'Idioma',
+
+  'about.author': 'por OmTsTM',
+  'splash.tagline': 'O corte que você vê é o corte que sai.',
 }

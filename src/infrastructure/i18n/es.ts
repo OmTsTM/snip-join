@@ -31,6 +31,9 @@ export const es: Catalogue = {
   'transport.pause': 'Pausar',
   'transport.previousFrame': 'Un fotograma atrás',
   'transport.nextFrame': 'Un fotograma adelante',
+  'transport.volume': 'Volumen',
+  'transport.mute': 'Silenciar',
+  'transport.unmute': 'Activar el sonido',
   'transport.toStart': 'Ir al principio',
   'transport.toEnd': 'Ir al final',
 
@@ -178,4 +181,7 @@ export const es: Catalogue = {
   'shortcuts.show': 'Atajos de teclado',
 
   'language.label': 'Idioma',
+
+  'about.author': 'por OmTsTM',
+  'splash.tagline': 'El corte que ves es el corte que sale.',
 }

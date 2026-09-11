@@ -145,6 +145,44 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   }
 
+  /*
+   * The preview's volume slider. Chromium gives no part for the filled side of
+   * the track, so the fill is a gradient whose stop is the value, handed in as
+   * --fill by the component.
+   */
+  .volume {
+    appearance: none;
+    height: 14px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .volume::-webkit-slider-runnable-track {
+    height: 3px;
+    border-radius: 2px;
+    background: linear-gradient(
+      90deg,
+      var(--color-dusk-lift) var(--fill, 100%),
+      var(--color-line-bright) var(--fill, 100%)
+    );
+  }
+
+  .volume::-webkit-slider-thumb {
+    appearance: none;
+    width: 11px;
+    height: 11px;
+    /* Half the thumb, less half the track, to sit it on the centre line. */
+    margin-top: -4px;
+    border-radius: 50%;
+    background: var(--color-paper);
+    transition: transform 120ms var(--ease-out-soft);
+  }
+
+  .volume:hover::-webkit-slider-thumb,
+  .volume:focus-visible::-webkit-slider-thumb {
+    transform: scale(1.18);
+  }
+
   .panel {
     background: var(--color-panel);
     border: 1px solid var(--color-line);

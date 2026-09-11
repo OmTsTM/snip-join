@@ -24,6 +24,23 @@
         "center": true,
         "dragDropEnabled": true,
         "theme": "Dark",
+        "backgroundColor": "#0C0A09",
+        "label": "main",
+        "visible": false
+      },
+      {
+        "label": "splash",
+        "url": "splash.html",
+        "title": "Snip Join",
+        "width": 440,
+        "height": 300,
+        "resizable": false,
+        "decorations": false,
+        "center": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": true,
+        "theme": "Dark",
         "backgroundColor": "#0C0A09"
       }
     ],

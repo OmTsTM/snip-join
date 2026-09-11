@@ -79,6 +79,9 @@ interface EditorState {
   selection: Span | null
   playhead: number
   playing: boolean
+  /** Preview loudness, 0 to 1. Remembered between sessions. */
+  volume: number
+  muted: boolean
   /** Timeline scale, in pixels per second. */
   pixelsPerSecond: number
   thumbnails: readonly Thumbnail[]
@@ -150,6 +153,8 @@ interface EditorState {
   seek: (at: number) => void
   setPlaying: (playing: boolean) => void
   togglePlay: () => void
+  setVolume: (value: number) => void
+  toggleMuted: () => void
   stepFrame: (direction: 1 | -1) => void
   setPixelsPerSecond: (value: number) => void
 
@@ -161,6 +166,8 @@ interface EditorState {
 }
 
 const DOCK_HEIGHT_KEY = 'snipjoin.timelineHeight'
+const VOLUME_KEY = 'snipjoin.volume'
+const MUTED_KEY = 'snipjoin.muted'
 
 /**
  * Reads the remembered dock height.
@@ -180,6 +187,41 @@ function readStoredDockHeight(): number {
 function storeDockHeight(height: number): void {
   try {
     window.localStorage.setItem(DOCK_HEIGHT_KEY, String(height))
+  } catch {
+    // The choice still applies for this session.
+  }
+}
+
+/**
+ * Reads the remembered loudness.
+ *
+ * Anything unusable falls back to full volume: a stored value that has been
+ * corrupted should not leave a user wondering why the preview is silent.
+ */
+function readStoredVolume(): number {
+  try {
+    // `Number(null)` is 0, so converting before the null check is what makes a
+    // first run silent: nothing stored has to mean full volume, not none.
+    const stored = window.localStorage.getItem(VOLUME_KEY)
+    if (stored === null) return 1
+    const value = Number(stored)
+    return Number.isFinite(value) && value >= 0 && value <= 1 ? value : 1
+  } catch {
+    return 1
+  }
+}
+
+function readStoredMuted(): boolean {
+  try {
+    return window.localStorage.getItem(MUTED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function remember(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value)
   } catch {
     // The choice still applies for this session.
   }
@@ -209,6 +251,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   selection: null,
   playhead: 0,
   playing: false,
+  volume: readStoredVolume(),
+  muted: readStoredMuted(),
   pixelsPerSecond: 40,
   thumbnails: [],
   keyframes: [],
@@ -456,6 +500,23 @@ export const useEditor = create<EditorState>((set, get) => ({
       return
     }
     set({ playing: !playing })
+  },
+
+  setVolume(value) {
+    const clamped = clamp(value, 0, 1)
+    // Moving the slider off zero is how anyone expects to come back from
+    // silence, so it lifts the mute rather than leaving a slider that does
+    // nothing.
+    const muted = clamped === 0 ? get().muted : false
+    set({ volume: clamped, muted })
+    remember(VOLUME_KEY, String(clamped))
+    remember(MUTED_KEY, String(muted))
+  },
+
+  toggleMuted() {
+    const muted = !get().muted
+    set({ muted })
+    remember(MUTED_KEY, String(muted))
   },
 
   stepFrame(direction) {

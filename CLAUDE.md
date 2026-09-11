@@ -187,6 +187,13 @@ media falls back to the ordinary locations rather than failing every write.
   error**. Derived collections belong in a `useMemo` inside the component, over
   inputs that only change when the edit does.
   `src/presentation/state/selectors.test.ts` guards this.
+- **The editor window is created hidden.** It is shown by `finish_startup`,
+  which the renderer calls after its first paint; until then the splash window
+  is all there is. Break that call and the application starts with no window at
+  all — `interface/splash.rs` carries a twelve second deadline that shows it
+  anyway, which is a backstop and not a design. The splash's progress bar and
+  the `MINIMUM` in that module describe the same 2600ms and have to move
+  together.
 - **The bundle identifier is the installer's upgrade identity.** Windows keys
   the uninstall entry and the web view's data folder off
   `tauri.conf.json identifier`, so changing it after a release makes the next

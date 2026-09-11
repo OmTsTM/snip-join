@@ -4,6 +4,8 @@ import { cx, IconButton } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { selectDuration, useEditor } from '@presentation/state/editorStore'
 
+import { VolumeControl } from './VolumeControl'
+
 export function Transport() {
   const t = useT()
   const playing = useEditor((state) => state.playing)
@@ -13,7 +15,7 @@ export function Transport() {
   const duration = useEditor(selectDuration)
 
   return (
-    <div className="flex shrink-0 items-center justify-center gap-5 px-6 pb-5">
+    <div className="relative flex shrink-0 items-center justify-center gap-5 px-6 pb-5">
       <Readout />
 
       <div className="flex items-center gap-1">
@@ -53,6 +55,12 @@ export function Transport() {
         >
           {formatTimecode(duration)}
         </button>
+      </div>
+
+      {/* Absolute, so adding a fourth item does not shift the transport off
+          centre: the play button stays under the middle of the picture. */}
+      <div className="absolute right-6 top-1/2 -translate-y-1/2">
+        <VolumeControl />
       </div>
     </div>
   )

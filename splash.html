@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1421"
+    />
+    <title>Snip Join</title>
+
+    <!--
+      Inline rather than a stylesheet: this window exists to be on screen
+      immediately, and a linked sheet costs a round trip during which it would
+      show unstyled text. The type falls back to the system stack until the
+      brand faces arrive a moment later.
+    -->
+    <style>
+      :root {
+        --matte: #0c0a09;
+        --paper: #f4e6d6;
+        --snip: #f9811e;
+        --muted: #8d9299;
+        --faint: #5c6269;
+        --dusk: #1b406b;
+      }
+
+      * {
+        margin: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background: var(--matte);
+        color: var(--paper);
+        font-family: 'Instrument Sans Variable', -apple-system, 'Segoe UI', sans-serif;
+        user-select: none;
+        cursor: default;
+      }
+
+      /* The window at dusk, behind the mark. */
+      body::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(115% 85% at 50% 26%, rgba(27, 64, 107, 0.42), transparent 68%);
+      }
+
+      /*
+       * The same faint grain the editor's ground uses. A soft gradient this
+       * large is dithered by the renderer, and against a near-black field the
+       * dither pattern is plainly visible as rings; the noise breaks it up.
+       * 2.5% opacity: felt, not seen.
+       */
+      body::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.025;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+      }
+
+      main {
+        position: relative;
+        display: flex;
+        height: 100%;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        padding: 26px 32px 20px;
+        text-align: center;
+      }
+
+      img {
+        width: 84px;
+        height: 84px;
+        border-radius: 18px;
+      }
+
+      h1 {
+        margin-top: 16px;
+        font-family: 'Bricolage Grotesque Variable', -apple-system, 'Segoe UI', sans-serif;
+        font-size: 27px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1;
+      }
+
+      /* Orange is the cutting half of the name, which is the same rule the rest
+         of the interface follows and the way the logo itself is drawn. */
+      h1 span:first-child {
+        color: var(--snip);
+      }
+
+      .version {
+        margin-top: 7px;
+        font-family: 'Geist Mono Variable', ui-monospace, Consolas, monospace;
+        font-size: 11px;
+        color: var(--faint);
+      }
+
+      .tagline {
+        margin-top: 13px;
+        max-width: 300px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .bar {
+        margin-top: 22px;
+        width: 190px;
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(244, 230, 214, 0.08);
+        overflow: hidden;
+      }
+
+      /* The duration is the same 2600ms the backend holds the window for. The
+         two are coupled on purpose: a bar that finishes early reads as a stall,
+         and one still moving when the window goes reads as an interruption. */
+      .bar i {
+        display: block;
+        width: 0;
+        height: 100%;
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--dusk), #7fa8d8);
+        animation: fill 2600ms cubic-bezier(0.35, 0.8, 0.4, 1) forwards;
+      }
+
+      @keyframes fill {
+        to {
+          width: 100%;
+        }
+      }
+
+      .by {
+        position: absolute;
+        bottom: 14px;
+        font-size: 10.5px;
+        letter-spacing: 0.02em;
+        color: var(--faint);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .bar i {
+          animation: none;
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <img id="mark" alt="" />
+      <h1><span>Snip</span><span>Join</span></h1>
+      <p class="version" id="version"></p>
+      <p class="tagline" id="tagline"></p>
+      <div class="bar"><i></i></div>
+      <p class="by" id="by"></p>
+    </main>
+
+    <script type="module" src="/src/splash/splash.ts"></script>
+  </body>
+</html>
