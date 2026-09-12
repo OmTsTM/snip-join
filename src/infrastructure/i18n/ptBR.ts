@@ -14,7 +14,6 @@ export const ptBR: Catalogue = {
   'welcome.opening': 'Lendo o arquivo…',
   'welcome.dropNow': 'Solte para abrir',
 
-  'source.open': 'Abrir outro vídeo',
   'source.resolution': '{width}x{height}',
   'source.noAudio': 'Sem áudio',
 
@@ -64,6 +63,9 @@ export const ptBR: Catalogue = {
   'project.forget': 'Tirar desta lista',
   'project.unsavedTitle': 'Salvar este projeto antes de fechar?',
   'project.unsavedBody': 'Os cortes que você fez ainda não estão no disco. Fechar agora perde tudo.',
+  'project.unsavedTitleExport': 'Salvar este projeto antes de exportar?',
+  'project.unsavedBodyExport': 'Os cortes que você fez ainda não estão no disco. A exportação grava um vídeo, não um projeto.',
+  'project.discardExport': 'Exportar sem salvar',
   'project.discard': 'Fechar sem salvar',
   'project.keepEditing': 'Continuar editando',
   'project.saved': 'Salvo',
@@ -77,6 +79,7 @@ export const ptBR: Catalogue = {
   'media.first': 'Define o formato ao qual todo o resto é ajustado',
   'media.still': 'Uma imagem parada. Dura o quanto você quiser.',
   'media.stillTag': 'Imagem',
+  'media.empty': 'Nada aqui ainda. Adicione um vídeo ou uma imagem para começar a edição.',
   'media.hint': 'Clique num arquivo para colocá-lo no fim. Arraste-o até a linha do tempo para posicioná-lo.',
   'media.appendTitle': 'Colocar na linha do tempo?',
   'media.appendBody': '{name} entra como um bloco novo no fim. De lá você pode movê-lo.',
@@ -207,6 +210,7 @@ export const ptBR: Catalogue = {
   'hint.cancelExport': 'Para a exportação. O arquivo não é gravado.',
   'hint.reveal': 'Abre a pasta com o arquivo selecionado',
   'hint.dismissExport': 'Fecha isto e volta para a edição',
+  'hint.discardExport': 'Vai direto para a exportação e deixa o projeto sem salvar',
   'hint.discard': 'Sai sem gravar nada no disco',
   'hint.keepEditing': 'Volta para a edição sem mudar nada',
   'hint.saveProject': 'Grava o projeto e continua saindo',

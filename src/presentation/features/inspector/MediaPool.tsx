@@ -53,7 +53,11 @@ export function MediaPool() {
     if (typeof selected === 'string') await addMedia(selected)
   }, [addMedia])
 
-  if (media.length === 0 && missingMedia.length === 0) return null
+  // Drawn even with nothing in it. A blank project is a project waiting for a
+  // file, and this panel is where a file is added from — hiding it leaves the
+  // editor with no visible way in at all, which is exactly the state somebody
+  // starting a new project is looking at.
+  const empty = media.length === 0 && missingMedia.length === 0
 
   const used = mediaOrder(timeline)
 
@@ -130,7 +134,9 @@ export function MediaPool() {
         </ul>
       )}
 
-      <p className="px-4 pb-3 pt-1 text-[11px] leading-snug text-faint">{t('media.hint')}</p>
+      <p className="px-4 pb-3 pt-1 text-[11px] leading-snug text-faint">
+        {empty ? t('media.empty') : t('media.hint')}
+      </p>
 
       <ConfirmDialog
         open={asking !== null}

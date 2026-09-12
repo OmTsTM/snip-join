@@ -95,6 +95,17 @@ the length its preview copy is built at so scrubbing cannot run past the picture
 without closing the file; the media pool still holds everything. What it is not
 is exportable, which `selectCanExport` gates.
 
+**Two kinds of nothing.** `phase: 'empty'` is the welcome screen; `phase:
+'blank'` is the editor with no media at all, which is what *New project*
+produces — the panels and the timeline waiting, rather than the front door. The
+editor is drawn for anything that is not `'empty'`, so the distinction costs one
+line, and `EMPTY_TIMELINE` has to be genuinely empty: it was once
+`createTimeline('', 0)`, one zero-length block belonging to no medium, which was
+invisible until a blank project became something you could look at and then drew
+the hole curtain over the preview and reported "1 block". The media panel stays
+drawn when it is empty for the same reason — it is the way a file gets in, and
+hiding it leaves that editor with no visible door.
+
 ## Skins
 
 Three: `dusk` (the default, and the one the editor was designed around), `slate`
@@ -407,6 +418,11 @@ per-session counters with no meaning outside the run that minted them.
   by preventing the close and calling `destroy()` itself when the handler does
   not object — so without that permission, attaching a close handler stops the
   window closing *at all*, silently, including from the title bar.
+- **Exporting asks about unsaved work too.** An export writes a video and
+  leaves the edit exactly where it was, so the moment before waiting several
+  minutes for a file is the moment to notice that the cuts behind it are not on
+  disk. Same dialog, different words — `UnsavedReason` picks them, because
+  "closing" while somebody presses Export is a dialog nobody reads twice.
 - Autosave only writes a project that already has a path. Choosing a name and a
   place on the user's behalf while they are editing is not a rescue.
 - **Opening a project prepares every medium, not only the first.** A project is

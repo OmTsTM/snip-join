@@ -14,7 +14,6 @@ export const zh: Catalogue = {
   'welcome.opening': '正在读取文件…',
   'welcome.dropNow': '松开即可打开',
 
-  'source.open': '打开其他视频',
   'source.resolution': '{width}x{height}',
   'source.noAudio': '无声音',
 
@@ -61,6 +60,9 @@ export const zh: Catalogue = {
   'project.forget': '从列表中移除',
   'project.unsavedTitle': '关闭前保存这个工程吗？',
   'project.unsavedBody': '你做的剪辑还没写入磁盘，现在关闭就会丢失。',
+  'project.unsavedTitleExport': '导出前保存这个项目吗？',
+  'project.unsavedBodyExport': '你做的剪辑还没有写入磁盘。导出写出的是视频，不是项目。',
+  'project.discardExport': '不保存并导出',
   'project.discard': '不保存并关闭',
   'project.keepEditing': '继续编辑',
   'project.saved': '已保存',
@@ -74,6 +76,7 @@ export const zh: Catalogue = {
   'media.first': '决定其他素材统一到的格式',
   'media.still': '一张静止图片，时长由你决定。',
   'media.stillTag': '静图',
+  'media.empty': '这里还是空的。添加一个视频或图片开始剪辑。',
   'media.hint': '单击文件把它加到末尾；拖到时间线上可以放在任意位置。',
   'media.appendTitle': '加到时间线上？',
   'media.appendBody': '{name} 会作为新片段加在末尾，之后可以随意移动。',
@@ -202,6 +205,7 @@ export const zh: Catalogue = {
   'hint.cancelExport': '停止导出，不会写出文件。',
   'hint.reveal': '打开文件夹并选中该文件',
   'hint.dismissExport': '关闭并回到编辑',
+  'hint.discardExport': '直接导出，项目保持未保存',
   'hint.discard': '离开，不向磁盘写入任何内容',
   'hint.keepEditing': '回到编辑，什么都不改',
   'hint.saveProject': '保存项目，然后继续离开',

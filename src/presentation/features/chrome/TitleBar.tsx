@@ -11,7 +11,7 @@ import { LOCALES, LOCALE_NAMES, type Locale } from '@infrastructure/i18n'
 import { SKINS, useSkin, type Skin } from './skins'
 import { selectDuration, useEditor } from '@presentation/state/editorStore'
 import { displaySize } from '@domain/media'
-import { NewProject, OpenAnother, OpenProject } from './OpenAnother'
+import { NewProject, OpenProject } from './OpenAnother'
 import { UpdateButton } from './UpdateButton'
 import { formatTimecode } from '@domain/time'
 
@@ -47,6 +47,9 @@ export function TitleBar({
   const setSkin = useSkin((state) => state.setSkin)
   const source = useEditor((state) => state.source)
   const duration = useEditor(selectDuration)
+  // Not `source`: a project can be open and blank, which is still an edit to
+  // start a new one from.
+  const editing = useEditor((state) => state.phase !== 'empty')
 
   // A machine with no browser association is not worth an error toast over a
   // link nobody has to press.
@@ -113,15 +116,17 @@ export function TitleBar({
 
         Opening a project is offered whether or not anything is loaded: it is
         the way back into work, and the welcome screen is exactly where that is
-        wanted. Adding a file is only meaningful once there is a project to add
-        it to — so the row's contents change, and a gap that has to look right
-        either way is a gap that belongs to the group rather than to each
-        control.
+        wanted. Starting a blank one is only meaningful once something is open —
+        so the row's contents change, and a gap that has to look right either
+        way is a gap that belongs to the group rather than to each control.
+
+        Adding another file is not here at all: the media panel has a button for
+        exactly that, beside the list the file lands in, which is where somebody
+        looking for it would look. Two doors to one room is one door too many.
       */}
       <div className="flex shrink-0 items-center gap-0.5 pr-1">
-        {source && <NewProject onStart={onNewProject} />}
+        {editing && <NewProject onStart={onNewProject} />}
         <OpenProject />
-        {source && <OpenAnother />}
 
         <UpdateButton onBeforeReplace={onBeforeReplace} />
 

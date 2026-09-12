@@ -20,7 +20,6 @@ export const en = {
   'welcome.opening': 'Reading the file…',
   'welcome.dropNow': 'Let go to open it',
 
-  'source.open': 'Open another video',
   'source.resolution': '{width}x{height}',
   'source.noAudio': 'No sound',
 
@@ -67,6 +66,9 @@ export const en = {
   'project.forget': 'Remove from this list',
   'project.unsavedTitle': 'Save this project before closing?',
   'project.unsavedBody': 'The cuts you have made are not on disk yet. Closing now loses them.',
+  'project.unsavedTitleExport': 'Save this project before exporting?',
+  'project.unsavedBodyExport': 'The cuts you have made are not on disk yet. The export writes a video, not a project.',
+  'project.discardExport': 'Export without saving',
   'project.discard': 'Close without saving',
   'project.keepEditing': 'Keep editing',
   'project.saved': 'Saved',
@@ -80,6 +82,7 @@ export const en = {
   'media.first': 'Sets the format everything else is matched to',
   'media.still': 'A still image. It lasts as long as you make it.',
   'media.stillTag': 'Still',
+  'media.empty': 'Nothing here yet. Add a video or an image to start the edit.',
   'media.hint': 'Click a file to put it at the end. Drag it onto the timeline to place it.',
   'media.appendTitle': 'Add it to the timeline?',
   'media.appendBody': '{name} goes on as a new block at the end. You can move it from there.',
@@ -210,6 +213,7 @@ export const en = {
   'hint.cancelExport': 'Stop the export. The file is left unwritten.',
   'hint.reveal': 'Open the folder with the file selected',
   'hint.dismissExport': 'Close this and go back to the edit',
+  'hint.discardExport': 'Go straight to the export and leave the project unsaved',
   'hint.discard': 'Leave without writing anything to disk',
   'hint.keepEditing': 'Go back to the edit and change nothing',
   'hint.saveProject': 'Write the project, then carry on leaving',

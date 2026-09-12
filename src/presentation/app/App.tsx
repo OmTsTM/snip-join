@@ -17,7 +17,7 @@ import { DockResizer } from '@presentation/features/timeline/DockResizer'
 import { TimelineDock } from '@presentation/features/timeline/TimelineDock'
 import { useOpenVideo } from '@presentation/features/chrome/OpenAnother'
 import { Welcome } from '@presentation/features/welcome/Welcome'
-import { UnsavedDialog } from '@presentation/features/project/UnsavedDialog'
+import { UnsavedDialog, type UnsavedReason } from '@presentation/features/project/UnsavedDialog'
 import { AUTOSAVE_INTERVAL_MS, useProjectActions } from '@presentation/features/project/useProject'
 import { useShortcuts } from '@presentation/hooks/useShortcuts'
 import { api } from '@infrastructure/tauri/api'
@@ -40,18 +40,64 @@ export function App() {
   const [dropActive, setDropActive] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
-  const [askingToSave, setAskingToSave] = useState(false)
+  const [askingToSave, setAskingToSave] = useState<UnsavedReason | null>(null)
 
   const dirty = useEditor(selectDirty)
   const projectPath = useEditor((state) => state.projectPath)
   const { saveNow, openExisting } = useProjectActions()
   const chooseVideo = useOpenVideo()
 
+  /**
+   * Asks about unsaved work, and answers whether it is all right to go ahead.
+   *
+   * One question with two callers, which is the whole reason it is shaped like
+   * this: the window closing, and an update about to replace the application
+   * underneath it. Both are moments where the state in this window stops
+   * existing, and only one of them used to ask — installing an update took the
+   * process down with `exit`, which fires no close event and so asked nothing.
+   *
+   * The answer arrives from a dialog, so it is a promise: the resolver is held
+   * until one of the three buttons is pressed.
+   */
+  const answer = useRef<((proceed: boolean) => void) | null>(null)
+
+  const askAboutUnsavedWork = useCallback(
+    (reason: UnsavedReason = 'leaving'): Promise<boolean> => {
+      const { media, history, savedMark } = useEditor.getState()
+
+      const unsaved =
+        media.length > 0 &&
+        (!savedMark || savedMark.timeline !== history.present || savedMark.media !== media)
+      if (!unsaved) return Promise.resolve(true)
+
+      setAskingToSave(reason)
+      return new Promise<boolean>((resolve) => {
+        answer.current = resolve
+      })
+    },
+    [],
+  )
+
+  const settle = useCallback((proceed: boolean) => {
+    setAskingToSave(null)
+    answer.current?.(proceed)
+    answer.current = null
+  }, [])
+
   // Guarded here rather than only on the button, so the keyboard cannot reach
   // the dialog for a timeline that would produce no file.
   const showExport = useCallback(() => {
-    if (useEditor.getState().history.present.blocks.length > 0) setExportOpen(true)
-  }, [])
+    if (useEditor.getState().history.present.blocks.length === 0) return
+
+    // Asked before the dialog rather than after it, because the answer changes
+    // what somebody does next: an export writes a video and leaves the edit
+    // exactly where it was, unsaved. The moment before waiting several minutes
+    // for a file is the moment to notice that the cuts behind it are not on
+    // disk.
+    void askAboutUnsavedWork('exporting').then((proceed) => {
+      if (proceed) setExportOpen(true)
+    })
+  }, [askAboutUnsavedWork])
   const showShortcuts = useCallback(() => setShortcutsOpen((open) => !open), [])
 
   // Asking the window to close, rather than closing anything here: the handler
@@ -105,39 +151,6 @@ export function App() {
     void useEditor.getState().closeFile()
   }, [])
 
-  /**
-   * Asks about unsaved work, and answers whether it is all right to go ahead.
-   *
-   * One question with two callers, which is the whole reason it is shaped like
-   * this: the window closing, and an update about to replace the application
-   * underneath it. Both are moments where the state in this window stops
-   * existing, and only one of them used to ask — installing an update took the
-   * process down with `exit`, which fires no close event and so asked nothing.
-   *
-   * The answer arrives from a dialog, so it is a promise: the resolver is held
-   * until one of the three buttons is pressed.
-   */
-  const answer = useRef<((proceed: boolean) => void) | null>(null)
-
-  const askAboutUnsavedWork = useCallback((): Promise<boolean> => {
-    const { media, history, savedMark } = useEditor.getState()
-
-    const unsaved =
-      media.length > 0 &&
-      (!savedMark || savedMark.timeline !== history.present || savedMark.media !== media)
-    if (!unsaved) return Promise.resolve(true)
-
-    setAskingToSave(true)
-    return new Promise<boolean>((resolve) => {
-      answer.current = resolve
-    })
-  }, [])
-
-  const settle = useCallback((proceed: boolean) => {
-    setAskingToSave(false)
-    answer.current?.(proceed)
-    answer.current = null
-  }, [])
 
   /**
    * Stands between unsaved work and the editor being put down.
@@ -155,7 +168,11 @@ export function App() {
 
     void getCurrentWindow()
       .onCloseRequested((event) => {
-        if (useEditor.getState().media.length === 0) return
+        // Whether the editor is open, not whether it holds anything: a blank
+        // project is one somebody started on purpose, and closing it should put
+        // them back at the front door like closing any other. Only from there
+        // does a close mean quit.
+        if (useEditor.getState().phase === 'empty') return
         event.preventDefault()
         void askAboutUnsavedWork().then((proceed) => {
           if (proceed) leaveProject()
@@ -182,16 +199,18 @@ export function App() {
    */
   const startNewProject = useCallback(() => {
     void askAboutUnsavedWork().then((proceed) => {
-      if (proceed) leaveProject()
+      if (!proceed) return
+      setExportOpen(false)
+      void useEditor.getState().newProject()
     })
-  }, [askAboutUnsavedWork, leaveProject])
+  }, [askAboutUnsavedWork])
 
   const saveThenProceed = useCallback(() => {
     void saveNow().then((written) => {
       // A dismissed picker is not a save, and going ahead on it would throw away
       // the work the question was asked about.
       if (written) settle(true)
-      else setAskingToSave(false)
+      else setAskingToSave(null)
     })
   }, [saveNow, settle])
 
@@ -351,7 +370,8 @@ export function App() {
       )}
 
       <UnsavedDialog
-        open={askingToSave}
+        open={askingToSave !== null}
+        reason={askingToSave ?? 'leaving'}
         onSave={saveThenProceed}
         onDiscard={() => settle(true)}
         onCancel={() => settle(false)}

@@ -95,7 +95,15 @@ export interface AppError {
   readonly message: string
 }
 
-export type Phase = 'empty' | 'opening' | 'preparing' | 'ready'
+/**
+ * What the window is showing.
+ *
+ * `empty` is the welcome screen and `blank` is the editor with nothing in it —
+ * two different nothings. The second one is what "new project" produces: the
+ * panels, the timeline and the media list, all waiting, which is the shape of a
+ * project that has not been given a file yet rather than a front door.
+ */
+export type Phase = 'empty' | 'blank' | 'opening' | 'preparing' | 'ready'
 
 export interface ExportJob {
   readonly jobId: string
@@ -249,6 +257,8 @@ interface EditorState {
   addMedia: (path: string, at?: number) => Promise<void>
   removeMedium: (mediaId: string) => Promise<void>
   closeFile: () => Promise<void>
+  /** Clears everything and stays in the editor, on a blank project. */
+  newProject: () => Promise<void>
 
   setSelection: (selection: Span | null) => void
   /**
@@ -494,7 +504,16 @@ function loadFrames(source: MediaSourceInfo, token: string): void {
 }
 
 /** The timeline before anything is open, so selectors never see null. */
-const EMPTY_TIMELINE = createTimeline('', 0, 'join')
+/**
+ * A timeline with nothing on it.
+ *
+ * Literally nothing: `createTimeline('', 0)` produced one block of zero length
+ * belonging to no medium, which was invisible while this only ever stood in for
+ * the welcome screen — and became a ghost the moment a blank project was
+ * something you could look at. It drew the hole curtain over the preview and
+ * reported "1 block" of `00:00 – 00:00`.
+ */
+const EMPTY_TIMELINE: Timeline = { blocks: [], mode: 'join' }
 
 /**
  * Guards a gesture so a continuous drag collapses into one undo step.
@@ -603,8 +622,13 @@ export const useEditor = create<EditorState>((set, get) => ({
    * afterwards.
    */
   async addMedia(path, at) {
-    const { mediaToken: token, phase } = get()
-    if (phase === 'empty') {
+    const { mediaToken: token, media } = get()
+
+    // The first file is an open however it arrives: from the welcome screen, or
+    // dropped into a project that is open and blank. `openFile` is what sets the
+    // source, the timeline and the preview; appending to nothing would leave all
+    // three unset.
+    if (media.length === 0) {
       await get().openFile(path)
       return
     }
@@ -683,6 +707,19 @@ export const useEditor = create<EditorState>((set, get) => ({
     })
 
     await api.forgetMedia(mediaId).catch(() => undefined)
+  },
+
+  /**
+   * Puts everything down and stays in the editor.
+   *
+   * The same clearing as closing the file, one phase apart: `closeFile` goes
+   * back to the front door and this opens an empty edit, which is what somebody
+   * asking for a new project meant — the room they were already in, with nothing
+   * in it.
+   */
+  async newProject() {
+    await get().closeFile()
+    set({ phase: 'blank' })
   },
 
   async closeFile() {

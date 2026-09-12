@@ -1,11 +1,7 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { useCallback } from 'react'
 
-import {
-  Folder,
-  NewProject as NewProjectIcon,
-  Project,
-} from '@presentation/components/Icons'
+import { NewProject as NewProjectIcon, Project } from '@presentation/components/Icons'
 import { CHROME_CONTROL, CHROME_ICON } from '@presentation/features/chrome/controls'
 import { useProjectActions } from '@presentation/features/project/useProject'
 import { useT } from '@presentation/i18n/I18nProvider'
@@ -61,31 +57,6 @@ export function useOpenVideo() {
 
     if (typeof selected === 'string') await addMedia(selected)
   }, [addMedia])
-}
-
-/**
- * Brings another file into the project.
- *
- * Lives in the title bar because the editor has no menu bar, and without it the
- * only way in is the folder button beside the media list, which is below the
- * fold on a short window.
- */
-export function OpenAnother() {
-  const t = useT()
-  const choose = useOpenVideo()
-
-  return (
-    <button
-      type="button"
-      onClick={() => void choose()}
-      title={t('source.open')}
-      aria-label={t('source.open')}
-      className={CHROME_CONTROL}
-    >
-      <Folder size={CHROME_ICON} />
-      {t('source.open')}
-    </button>
-  )
 }
 
 /**

@@ -14,7 +14,6 @@ export const es: Catalogue = {
   'welcome.opening': 'Leyendo el archivo…',
   'welcome.dropNow': 'Suelta para abrirlo',
 
-  'source.open': 'Abrir otro vídeo',
   'source.resolution': '{width}x{height}',
   'source.noAudio': 'Sin sonido',
 
@@ -64,6 +63,9 @@ export const es: Catalogue = {
   'project.forget': 'Quitar de esta lista',
   'project.unsavedTitle': '¿Guardar este proyecto antes de cerrar?',
   'project.unsavedBody': 'Los cortes que has hecho aún no están en el disco. Cerrar ahora los pierde.',
+  'project.unsavedTitleExport': '¿Guardar este proyecto antes de exportar?',
+  'project.unsavedBodyExport': 'Los cortes que hiciste aún no están en el disco. La exportación escribe un vídeo, no un proyecto.',
+  'project.discardExport': 'Exportar sin guardar',
   'project.discard': 'Cerrar sin guardar',
   'project.keepEditing': 'Seguir editando',
   'project.saved': 'Guardado',
@@ -77,6 +79,7 @@ export const es: Catalogue = {
   'media.first': 'Define el formato al que se ajusta todo lo demás',
   'media.still': 'Una imagen fija. Dura lo que tú decidas.',
   'media.stillTag': 'Imagen',
+  'media.empty': 'Aquí no hay nada todavía. Añade un vídeo o una imagen para empezar la edición.',
   'media.hint': 'Haz clic en un archivo para ponerlo al final. Arrástralo a la línea de tiempo para colocarlo.',
   'media.appendTitle': '¿Ponerlo en la línea de tiempo?',
   'media.appendBody': '{name} entra como un bloque nuevo al final. Desde ahí puedes moverlo.',
@@ -207,6 +210,7 @@ export const es: Catalogue = {
   'hint.cancelExport': 'Detiene la exportación. El archivo no se escribe.',
   'hint.reveal': 'Abre la carpeta con el archivo seleccionado',
   'hint.dismissExport': 'Cierra esto y vuelve a la edición',
+  'hint.discardExport': 'Va directo a la exportación y deja el proyecto sin guardar',
   'hint.discard': 'Sale sin escribir nada en el disco',
   'hint.keepEditing': 'Vuelve a la edición sin cambiar nada',
   'hint.saveProject': 'Guarda el proyecto y sigue saliendo',

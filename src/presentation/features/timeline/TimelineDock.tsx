@@ -73,7 +73,9 @@ export function TimelineDock() {
   const pendingFrames = useEditor((state) => state.pendingFrames)
   // Covered from the moment a file is being prepared until the last frame has
   // landed, which is the whole stretch where the strip is visibly changing.
-  const stripLoading = phase !== 'empty' && (phase !== 'ready' || pendingFrames > 0)
+  // Covered while a file is being opened or prepared, and while frames are
+  // still arriving. Not on a blank project: there is nothing on its way.
+  const stripLoading = phase === 'opening' || phase === 'preparing' || pendingFrames > 0
   const snapToCutPoints = useEditor((state) => state.snapToCutPoints)
   const setSnapToCutPoints = useEditor((state) => state.setSnapToCutPoints)
   const edgeScroll = useEditor((state) => state.edgeScroll)
