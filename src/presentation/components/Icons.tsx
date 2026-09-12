@@ -143,6 +143,15 @@ export const Folder = (props: IconProps) => (
   </Icon>
 )
 
+/** An arrow coming down into a tray: fetching something from elsewhere. */
+export const Download = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M12 4v10" />
+    <path d="M8 10.5 12 14.5l4-4" />
+    <path d="M4.5 16v2.5a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5V16" />
+  </Icon>
+)
+
 export const Grip = (props: IconProps) => (
   <Icon {...props}>
     <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />

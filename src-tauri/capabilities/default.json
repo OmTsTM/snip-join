@@ -20,7 +20,8 @@
       "identifier": "opener:allow-open-url",
       "allow": [
         { "url": "https://ko-fi.com/omtstm" },
-        { "url": "https://github.com/OmTsTM/snip-join" }
+        { "url": "https://github.com/OmTsTM/snip-join" },
+        { "url": "https://github.com/OmTsTM/snip-join/releases" }
       ]
     }
   ]

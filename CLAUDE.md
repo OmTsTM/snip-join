@@ -422,10 +422,41 @@ per-session counters with no meaning outside the run that minted them.
   where nothing is ever re-evaluated; restart `pnpm app:dev` before believing
   it.
 
+## Updating
+
+One button, and nothing that happens on its own. `application/update.rs` asks
+`/releases/latest`, compares the tag with the running version through
+`domain/version.rs`, and picks the file that replaces *this* kind of copy: the
+`.exe` for an installed one, the `_portable.zip` for a portable one. Offering the
+wrong one would leave two Snip Joins on the machine, one of them in the registry.
+
+- **The renderer still has no HTTP capability.** `infrastructure/http.rs` is the
+  only place in the application that touches the network, and it is reached from
+  two commands.
+- **A download address out of a JSON document is untrusted input.** Every URL is
+  checked against the project's own release downloads before a byte is fetched;
+  without that, a tampered reply could have the application download anything
+  from anywhere and then offer to run it. GitHub redirects to its asset storage
+  and the client follows, so the guard is on where the chain begins — the part
+  the reply cannot move.
+- **There is no signature check.** The trust is TLS and the repository, exactly
+  as if the user had clicked the same asset on the releases page. Making it
+  stronger means `tauri-plugin-updater`, a minisign key pair, and the private
+  half living in CI — a change to the release process, not to this code.
+- **Nothing self-replaces.** An installed copy runs its own installer and the
+  application exits behind it, because the installer cannot replace files this
+  process holds open. A portable copy is revealed in Explorer: finishing that job
+  on Windows means a script that runs after the application exits, which is not
+  worth one drag in Explorer.
+- A repository with no releases answers 404, which is reported as "nothing to
+  do". So is a release carrying nothing this copy could install — the button
+  must never offer an update it would then refuse to fetch.
+
 ## Security posture
 
 - The renderer has **no** filesystem, shell or HTTP capability. See
-  `src-tauri/capabilities/default.json`.
+  `src-tauri/capabilities/default.json`. The update check is a command, for
+  exactly that reason.
 - The splash window has a capability file of its own, granting it exactly one
   command: opening the credit line's address, scoped to that single URL. It is
   separate rather than a second entry in the editor's `windows` list, because
@@ -453,7 +484,7 @@ cd src-tauri && cargo clippy --all-targets
 cd src-tauri && cargo fmt --all         # rustfmt.toml sits at the repo root
 pnpm ffmpeg:fetch       # download the FFmpeg that gets bundled
 pnpm ffmpeg:check       # report whether the local copy is current
-pnpm app:build          # fetch + NSIS and MSI installers
+pnpm app:build          # fetch + the NSIS installer
 pnpm app:portable       # fetch + build + portable zip
 ```
 

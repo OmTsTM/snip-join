@@ -1,6 +1,6 @@
 [package]
 name = "snipjoin"
-version = "1.0.0"
+version = "1.1.0"
 description = "Snip a stretch out of any video, join what is left, and export it."
 authors = ["Snip Join"]
 edition = "2021"
@@ -31,6 +31,10 @@ thiserror = "2"
 tokio = { version = "1", features = ["process", "io-util", "sync", "rt-multi-thread", "macros", "time", "fs"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 which = "7"
+# The update check, and nothing else. `native-tls` rather than a bundled stack:
+# on Windows that is schannel and the machine's own certificate store, which is
+# the same trust the user's browser would apply to the same download.
+reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls", "charset"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dunce = "1"

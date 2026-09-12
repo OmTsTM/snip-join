@@ -97,16 +97,22 @@ jobs:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: Snip Join ${{ steps.naming.outputs.version }}
           releaseBody: |
-            Windows installer, NSIS and MSI. FFmpeg is inside: nothing else has
-            to be installed and nothing has to be on PATH.
+            **Snip Join_*-setup.exe** installs it. **Snip Join_*_portable.zip**
+            runs from a folder and touches neither your profile nor the
+            registry. FFmpeg is inside both: nothing else has to be installed
+            and nothing has to be on PATH.
 
             Cuts are copies by default — no decoding, no encoding, seconds
             rather than minutes, and no graphics card required.
+          # Drafted here and published at the end of this job, once the portable
+          # archive has been attached. A release that appears the moment the
+          # installer is uploaded is a release somebody downloads while it is
+          # still missing half of its files.
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
 
-      # Published alongside the installers: unzip and run, with the scratch
+      # Published alongside the installer: unzip and run, with the scratch
       # space and the web view's own storage redirected into `data/` beside the
       # executable so nothing reaches the user's profile or the registry.
       - name: Attach the portable archive
@@ -116,5 +122,18 @@ jobs:
           $version = "${{ steps.naming.outputs.version }}"
           pnpm portable:pack
           gh release upload $tag "src-tauri/target/release/bundle/portable/Snip Join_${version}_x64_portable.zip" --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Everything is attached, so the release goes public in one step: the
+      # installer, the portable archive, and the two source archives GitHub adds
+      # to any release cut from a tag. `--latest` is what the update check in
+      # the application reads, so it has to be this one.
+      - name: Publish it
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag || github.ref_name }}"
+          gh release edit $tag --draft=false --latest
+          gh release view $tag --json assets --jq '.assets[].name'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

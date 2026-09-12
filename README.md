@@ -249,12 +249,19 @@ the title bar at any time.
 on your PATH. Each release carries the current FFmpeg release build, fetched
 automatically at packaging time.
 
-Three ways to get it, all in `src-tauri/target/release/bundle/`:
+**Updating.** The download button in the title bar asks GitHub what the newest
+release is and, if it is ahead of the copy running, fetches the right file for
+it — the installer for an installed copy, the archive for a portable one — into
+your downloads folder. Installing closes Snip Join so the installer can replace
+it; a portable copy is shown in Explorer for you to unzip over the folder it runs
+from. Nothing is checked, fetched or run unless you press the button: the
+application makes no network request of its own accord.
+
+Two ways to get it, both in `src-tauri/target/release/bundle/`:
 
 | | |
 | --- | --- |
 | `nsis/Snip Join_*-setup.exe` | Ordinary installer. Registers *Open with → Snip Join*. |
-| `msi/Snip Join_*.msi` | Same, for managed deployment. |
 | `portable/Snip Join_*_portable.zip` | Unzip and run. No installer, no registry. |
 
 The portable copy keeps everything it writes — preview cache, export scratch,

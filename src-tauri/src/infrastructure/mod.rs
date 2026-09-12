@@ -3,5 +3,6 @@
 
 pub mod executor;
 pub mod ffmpeg;
+pub mod http;
 pub mod paths;
 pub mod portable;

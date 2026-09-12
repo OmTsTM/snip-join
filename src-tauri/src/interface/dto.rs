@@ -249,3 +249,36 @@ mod tests {
         assert!(request(clips).edit_list().is_err());
     }
 }
+
+/// What the update check found.
+///
+/// `newer` is absent when there is nothing to do, which covers three cases the
+/// renderer does not need to tell apart: the newest release is the one running,
+/// there are no releases yet, and the newest one carries nothing this copy could
+/// install.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateReportDto {
+    pub current: String,
+    /// `installer` or `portable`: which of the two ways this copy is replaced.
+    pub kind: String,
+    pub newer: Option<UpdateReleaseDto>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateReleaseDto {
+    pub version: String,
+    pub tag: String,
+    pub asset_name: String,
+    pub asset_url: String,
+    pub asset_size: u64,
+}
+
+/// How far a download has come.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateProgress {
+    pub received: u64,
+    pub total: u64,
+}

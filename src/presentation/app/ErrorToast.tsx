@@ -15,6 +15,7 @@ const TRANSLATED_CODES = new Set([
   'encodeFailed',
   'invalidInput',
   'internal',
+  'networkFailed',
 ])
 
 /**

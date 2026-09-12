@@ -12,6 +12,7 @@ import { SKINS, useSkin, type Skin } from './skins'
 import { selectDuration, useEditor } from '@presentation/state/editorStore'
 import { displaySize } from '@domain/media'
 import { OpenAnother, OpenProject } from './OpenAnother'
+import { UpdateButton } from './UpdateButton'
 import { formatTimecode } from '@domain/time'
 
 /**
@@ -110,6 +111,8 @@ export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => 
       <div className="flex shrink-0 items-center gap-0.5 pr-1">
         <OpenProject />
         {source && <OpenAnother />}
+
+        <UpdateButton />
 
         <button
           type="button"

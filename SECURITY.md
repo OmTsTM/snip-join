@@ -25,9 +25,14 @@ design:
 | `dialog:allow-open`, `allow-save`, `allow-message` | The native file pickers |
 | `opener:allow-reveal-item-in-dir` | Showing a finished export in Explorer |
 
+| `opener:allow-open-url` | Two addresses, listed one by one: the project page and its releases |
+
 There is no `fs:`, no `shell:`, no `http:` permission. A grant stops being
 listed the moment its last caller is deleted, which is why
 `core:webview:allow-internal-toggle-devtools` is no longer there.
+
+The update check is a Rust command for this reason: the window can ask whether
+there is a newer version, and it still cannot make a request of its own.
 
 ## The asset protocol starts with nothing
 
@@ -84,10 +89,35 @@ Tauri and none reachable from this program:
 - One `unsound` notice in `glib` 0.18 — part of the GTK backend Tauri uses on
   Linux, which is not compiled into a Windows build.
 
+## The network, in full
+
+Snip Join collects nothing, reports nothing, and contacts nothing on its own.
+There is no telemetry, no crash reporting, no check at startup. Two things in
+the whole project reach the internet, and this is all of them:
+
+- **The update button, when pressed.** It requests
+  `https://api.github.com/repos/OmTsTM/snip-join/releases/latest`, and — only if
+  the user then presses download — one file from
+  `https://github.com/OmTsTM/snip-join/releases/download/…`. That prefix is
+  checked in `application/update.rs` before a byte is fetched: the addresses
+  arrive in a JSON document from the network, so they are untrusted input, and
+  without the check a tampered reply could point the download at any host and
+  have the application offer to run what came back. The name of the file is used
+  only as a file name, its last component and nothing else. The page behind
+  "what changed" is a constant in this repository, not an address out of that
+  document.
+- **`scripts/fetch-ffmpeg.mjs`**, which downloads the FFmpeg build that gets
+  packaged. A developer and CI step; the installed application never runs it.
+
+**An update is not signature-verified.** It is fetched over TLS from this
+project's own releases and is exactly as trustworthy as the repository it comes
+from — the same trust as clicking the asset on the releases page by hand. An
+installed copy runs the downloaded installer, which puts its own window and its
+own UAC prompt on screen; nothing is executed silently, and nothing runs without
+the user pressing "install". A portable copy is not touched at all: the archive
+is revealed in Explorer.
+
 ## Scope
 
-Snip Join edits files the user opens on their own machine. It does not
-communicate over the network at run time, collects nothing, and reports nothing.
-The single network access in the project is `scripts/fetch-ffmpeg.mjs`, which
-downloads the FFmpeg build that gets packaged — a developer and CI step, not
-something the installed application ever does.
+Snip Join edits files the user opens on their own machine, with the two network
+accesses above and no others.

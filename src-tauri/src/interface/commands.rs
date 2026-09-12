@@ -1,17 +1,20 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_opener::OpenerExt;
 
 use crate::application::error::{AppError, AppResult};
-use crate::application::{export_plan, media_library, project_file};
+use crate::application::{export_plan, media_library, project_file, update};
 use crate::domain::media::MediaSource;
+use crate::domain::version::Version;
 use crate::infrastructure::executor;
 use crate::infrastructure::ffmpeg::{capabilities, keyframes, thumbnailer, transcoder};
-use crate::infrastructure::paths;
+use crate::infrastructure::{http, paths, portable};
 use crate::state::EditorState;
 
 use super::dto::{
     ExportOutcome, ExportRequest, JobProgress, KeyframeReport, PreviewSource, ThumbnailDto,
+    UpdateProgress, UpdateReleaseDto, UpdateReportDto,
 };
 use super::events;
 use super::splash;
@@ -395,4 +398,144 @@ where
         }
     }
     results
+}
+
+/// Where an update is put while it is being fetched.
+///
+/// The user's downloads folder rather than the scratch space, and on purpose:
+/// they asked for this file, it is the same one they would have fetched from the
+/// releases page by hand, and it should be somewhere they can find it again — to
+/// keep, to check, or to run a second time if the first attempt went wrong.
+fn downloads_dir(app: &AppHandle) -> PathBuf {
+    app.path().download_dir().unwrap_or_else(|_| paths::scratch_root())
+}
+
+/// How this copy was put on the machine, and therefore how it is replaced.
+fn install_kind() -> update::InstallKind {
+    if portable::is_portable() {
+        update::InstallKind::Portable
+    } else {
+        update::InstallKind::Installed
+    }
+}
+
+/// Asks GitHub whether a newer Snip Join has been published.
+///
+/// Nothing is fetched until the user presses the button: the application makes
+/// no network request of its own accord, at startup or otherwise. A repository
+/// with no releases yet answers 404, which is reported as "nothing to do" — it
+/// is the ordinary state of a project before its first release. Anything else
+/// that goes wrong is reported as what it is: answering "you have the newest
+/// version" to a question that never reached GitHub is a lie.
+#[tauri::command]
+pub async fn check_for_update(app: AppHandle) -> AppResult<UpdateReportDto> {
+    let current = Version::parse(&app.package_info().version.to_string())
+        .ok_or_else(|| AppError::Internal("this build has no readable version".into()))?;
+
+    let kind = install_kind();
+
+    let latest = match http::get_json(update::LATEST_RELEASE_URL).await? {
+        Some(body) => Some(update::parse_release(&body)?),
+        None => None,
+    };
+
+    let report = update::compare(current, kind, latest);
+
+    Ok(UpdateReportDto {
+        current: report.current.to_string(),
+        kind: match report.kind {
+            update::InstallKind::Installed => "installer".into(),
+            update::InstallKind::Portable => "portable".into(),
+        },
+        // `compare` has already refused a release with nothing to install, so
+        // the asset is there — and asked rather than asserted, because a
+        // command that panics takes the window with it.
+        newer: report.newer.and_then(|release| {
+            let asset = update::pick_asset(&release.assets, kind)?;
+            Some(UpdateReleaseDto {
+                version: release.version.to_string(),
+                tag: release.tag.clone(),
+                asset_name: asset.name.clone(),
+                asset_url: asset.url.clone(),
+                asset_size: asset.size,
+            })
+        }),
+    })
+}
+
+/// Fetches the file the check found.
+///
+/// The address is checked against the project's own release downloads before a
+/// single byte is requested. It arrived in a JSON document from the network, and
+/// a URL from there is untrusted input like any other — without this, a tampered
+/// reply could have the application download anything from anywhere and then
+/// offer to run it.
+#[tauri::command]
+pub async fn download_update(app: AppHandle, url: String, name: String) -> AppResult<String> {
+    if !update::is_download_allowed(&url) {
+        return Err(AppError::InvalidInput("that download is not from Snip Join".into()));
+    }
+
+    // The name comes from the same document. Only its last component is used,
+    // and only as a file name, so nothing can be written outside the folder.
+    let file_name = Path::new(&name)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|n| !n.is_empty())
+        .ok_or_else(|| AppError::InvalidInput("that file has no name".into()))?;
+
+    let destination = downloads_dir(&app).join(file_name);
+
+    let handle = app.clone();
+    let path = http::download(&url, &destination, move |received, total| {
+        let _ = handle.emit(events::UPDATE_PROGRESS, UpdateProgress { received, total });
+    })
+    .await?;
+
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Hands the downloaded update over.
+///
+/// An installed copy is replaced by its own installer, which needs Snip Join to
+/// have let go of its files first — so the installer is started and the
+/// application closes behind it. A portable copy is not touched: the archive is
+/// revealed in Explorer and the user unzips it over the folder they keep it in.
+///
+/// Deliberately not a self-replacing updater. A portable copy could rename its
+/// own executable and copy a new one in beside it, and every way of finishing
+/// that job on Windows ends in a script that runs after the application has
+/// exited — a thing this application otherwise never does, for a saving of one
+/// drag in Explorer.
+#[tauri::command]
+pub async fn apply_update(app: AppHandle, path: String) -> AppResult<()> {
+    let file = Path::new(&path);
+    if !file.is_file() {
+        return Err(AppError::InvalidInput("that update is no longer there".into()));
+    }
+
+    match install_kind() {
+        update::InstallKind::Portable => {
+            app.opener()
+                .reveal_item_in_dir(file)
+                .map_err(|error| AppError::Internal(error.to_string()))?;
+            Ok(())
+        }
+        update::InstallKind::Installed => {
+            // Spawned with an argument vector and no shell, like every other
+            // process this application starts. It is the user's own download,
+            // started because they pressed "install", and it puts its own window
+            // on screen — nothing here is silent.
+            std::process::Command::new(file).spawn().map_err(|error| {
+                AppError::Internal(format!("the installer would not start: {error}"))
+            })?;
+
+            // The installer cannot replace files this process is holding open,
+            // so the application leaves. Everything unsaved has already been
+            // asked about: the renderer only reaches this command from a button
+            // it puts behind that question.
+            app.exit(0);
+            Ok(())
+        }
+    }
 }

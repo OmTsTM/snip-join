@@ -7,3 +7,4 @@
 pub const EXPORT_PROGRESS: &str = "snipjoin://export-progress";
 pub const PROXY_PROGRESS: &str = "snipjoin://proxy-progress";
 pub const THUMBNAIL_READY: &str = "snipjoin://thumbnail-ready";
+pub const UPDATE_PROGRESS: &str = "snipjoin://update-progress";

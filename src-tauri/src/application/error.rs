@@ -31,6 +31,9 @@ pub enum AppError {
     #[error("the export stopped: {0}")]
     EncodeFailed(String),
 
+    #[error("the network could not be reached: {0}")]
+    NetworkFailed(String),
+
     #[error("cancelled")]
     Cancelled,
 
@@ -49,6 +52,7 @@ impl AppError {
             AppError::UnsupportedMedia => "unsupportedMedia",
             AppError::ProbeFailed(_) => "probeFailed",
             AppError::EncodeFailed(_) => "encodeFailed",
+            AppError::NetworkFailed(_) => "networkFailed",
             AppError::Cancelled => "cancelled",
             AppError::Internal(_) => "internal",
         }

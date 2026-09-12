@@ -137,6 +137,35 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
   }
 }
 
+/** How this copy is replaced: by its installer, or by unzipping an archive. */
+export type InstallKind = 'installer' | 'portable'
+
+export interface UpdateRelease {
+  readonly version: string
+  readonly tag: string
+  readonly assetName: string
+  readonly assetUrl: string
+  readonly assetSize: number
+}
+
+/**
+ * What the update check found.
+ *
+ * `newer` is absent whenever there is nothing to do — the newest release is the
+ * one running, there are no releases yet, or the newest one carries nothing this
+ * copy could install. The three are the same answer from where the user sits.
+ */
+export interface UpdateReport {
+  readonly current: string
+  readonly kind: InstallKind
+  readonly newer: UpdateRelease | null
+}
+
+export interface UpdateProgress {
+  readonly received: number
+  readonly total: number
+}
+
 export const api = {
   openMedia: (path: string) => call<MediaSourceInfo>('open_media', { path }),
 
@@ -187,6 +216,24 @@ export const api = {
 
   /** Whether a path still points at a readable file. */
   mediaExists: (path: string) => call<boolean>('media_exists', { path }),
+
+  /**
+   * Asks GitHub whether a newer Snip Join has been published.
+   *
+   * The renderer has no HTTP capability, which is the point: the request is made
+   * by the backend, to one address, and only when this is called.
+   */
+  checkForUpdate: () => call<UpdateReport>('check_for_update'),
+
+  /** Fetches the update into the downloads folder, answering with its path. */
+  downloadUpdate: (url: string, name: string) =>
+    call<string>('download_update', { url, name }),
+
+  /**
+   * Hands the downloaded file over: runs the installer and closes Snip Join, or
+   * shows the archive in Explorer for a portable copy.
+   */
+  applyUpdate: (path: string) => call<void>('apply_update', { path }),
 } as const
 
 /** Event topics, matching `src-tauri/src/interface/events.rs`. */
@@ -194,6 +241,7 @@ export const EVENTS = {
   exportProgress: 'snipjoin://export-progress',
   proxyProgress: 'snipjoin://proxy-progress',
   thumbnailReady: 'snipjoin://thumbnail-ready',
+  updateProgress: 'snipjoin://update-progress',
 } as const
 
 /**

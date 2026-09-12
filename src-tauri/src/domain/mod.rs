@@ -7,3 +7,4 @@ pub mod error;
 pub mod export;
 pub mod media;
 pub mod time;
+pub mod version;
