@@ -18,6 +18,7 @@
     "i18n:check": "node scripts/check-i18n.mjs",
     "icons": "python scripts/make-icon-source.py",
     "banner": "python scripts/make-banner.py",
+    "support": "python scripts/make-support.py",
     "tauri": "tauri",
     "app:dev": "tauri dev",
     "app:build": "node scripts/fetch-ffmpeg.mjs && tauri build",

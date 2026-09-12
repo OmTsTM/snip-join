@@ -14,6 +14,7 @@
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-1B406B?style=flat-square"></a>
   <img alt="Windows" src="https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square">
   <img alt="FFmpeg included" src="https://img.shields.io/badge/FFmpeg-included-F4E6D6?style=flat-square&labelColor=090A0B">
+  <a href="https://ko-fi.com/omtstm"><img alt="Support on Ko-fi" src="https://img.shields.io/badge/Ko--fi-support-FF5E5B?style=flat-square&logo=ko-fi&logoColor=white"></a>
 </p>
 
 ---
@@ -23,13 +24,13 @@ the middle of a recording. Snip Join does that one thing, and does it with the
 precision and finish of a paid tool.
 
 <p align="center">
-  <img src="docs/screenshot-selection.png" alt="Eight seconds marked for removal: two orange rails across the timeline, the in and out points and the length in the panel on the right" width="880">
+  <img src="docs/screenshot-selection.png" alt="Eight seconds marked for removal: two orange rails across the timeline, with the in point, out point and length shown in the panel on the right" width="880">
 </p>
 
 <p align="center">
-  <em>Eight seconds marked. Both edges landed on 00:11.933 and 00:19.933 — not
-  round numbers, but the nearest cut points in this file, which is what lets the
-  export copy the stream instead of re-encoding it.</em>
+  <em>Eight seconds marked, from 00:12.000 to 00:20.000. Both edges are on cut
+  points — the small marks under the ruler — which is what lets the export copy
+  the stream instead of re-encoding it.</em>
 </p>
 
 ## Contents
@@ -43,6 +44,7 @@ precision and finish of a paid tool.
 - [Installing](#installing)
 - [Building it](#building-it)
 - [How it is built](#how-it-is-built)
+- [Support](#support)
 
 ## What it does
 
@@ -80,8 +82,30 @@ exports as black with silence, and the video keeps its original length.
 **Blocks.** The video starts as one block. Every cut splits it, and each piece is
 numbered in the order it plays. Grab a block by its ridged handle to move it:
 with joining on you are changing the running order, with joining off you are
-placing it anywhere on the timeline. Drag an edge to trim. A torn orange edge
-marks a seam you made; a clean edge is the original boundary.
+placing it anywhere on the timeline. Carry one past its neighbour and the two
+glide into each other's places while you watch — no block is ever drawn on top
+of another. Drag an edge to trim; an edge stops where the next block begins. A
+torn orange edge marks a seam you made; a clean edge is the original boundary.
+Reach the side of the window and the timeline follows you, so the far end of a
+long block is never out of reach.
+
+**Pick a block up.** Click one and it wears a pale ring: that is the piece the
+keyboard is about to act on. `Delete` removes it, `Ctrl`+`C` and `Ctrl`+`X` put
+it aside, `Ctrl`+`V` drops it back in at the playhead, and `Alt`+`←` `→` walks it
+along the running order without going near the handle. Right-click for the same
+list, plus *Duplicate*.
+
+You can delete every block. An empty timeline is a fresh start, not a dead end —
+the files stay in *Media*, and dragging one back in starts the edit again.
+
+**Several files.** Add more with the folder button beside *Media*. Clicking a
+file asks whether to put it on the end; dragging it out of the list drops it
+wherever you let go, with a blue marker showing exactly where that is.
+
+**Still images too.** Drop in a PNG or a JPEG and it becomes a block like any
+other — five seconds by default, dragged to any length up to a minute. A
+container claims a still is a fortieth of a second long; the editor ignores that
+and the export draws the frame for as long as you asked.
 
 **Lift out to move.** Turns the marked stretch into its own block without
 deleting anything, so you can drag that moment somewhere else entirely.
@@ -106,7 +130,7 @@ did end up between two of them, it tells you how far it will move instead of
 letting you find out afterwards.
 
 <p align="center">
-  <img src="docs/screenshot-export.png" alt="The export dialog with Copy selected and the line Exact cuts, nothing is re-encoded" width="880">
+  <img src="docs/screenshot-export.png" alt="The export dialog with Copy selected and the line Exact cuts, nothing is re-encoded" width="640">
 </p>
 
 <p align="center">
@@ -166,8 +190,11 @@ The size is remembered between sessions.
 | `←` `→` | One frame |
 | `Shift` + `←` `→` | One second |
 | `I` / `O` | Mark the start / end of the selection |
-| `Delete` | Remove the selection |
+| `Delete` | Remove the selection, or the chosen block when nothing is marked |
 | `S` | Split at the playhead |
+| `Ctrl` + `C` / `X` | Copy / cut the chosen block |
+| `Ctrl` + `V` | Paste it back in at the playhead |
+| `Alt` + `←` `→` | Move the chosen block along the running order |
 | `Esc` | Clear the selection |
 | `Ctrl` + `Z` / `Y` | Undo / redo |
 | `Ctrl` + `E` | Export |
@@ -223,13 +250,35 @@ know nothing about FFmpeg and FFmpeg knows nothing about the window. The whole
 export routing decision is a pure function returning a list of commands, which is
 why it can be tested without encoding anything.
 
-Covered by 119 Rust unit tests, 8 end-to-end tests that drive real FFmpeg and
-assert on the resulting files, and 72 renderer tests. See
+Covered by 132 Rust unit tests, 13 end-to-end tests that drive real FFmpeg and
+assert on the resulting files, and 120 renderer tests. See
 [CLAUDE.md](CLAUDE.md) for the architecture and the traps.
 
 The interface takes its palette straight from the logo: `#F9811E` is the
 scissors, `#F4E6D6` is the "Join" lettering. Orange means cutting and nothing
 else, which is why the Export button is not orange.
+
+## Support
+
+<p align="center">
+  <a href="https://ko-fi.com/omtstm">
+    <img src="docs/support.png" alt="omtstm on Ko-fi — if Snip Join saved you an afternoon, you can buy me a coffee. Anything from $5, and thank you." width="880">
+  </a>
+</p>
+
+Snip Join is free, MIT-licensed, and built in the open. If it saved you an
+afternoon of waiting on an export, you can put something in the tip jar —
+**anything from $5**, and it is genuinely appreciated.
+
+<p align="center">
+  <a href="https://ko-fi.com/omtstm">
+    <img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-ko--fi.com%2Fomtstm-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Buy me a coffee on Ko-fi">
+  </a>
+</p>
+
+Nothing here is gated behind it. There is no paid tier, no nag screen, and the
+program will never ask — the credit line on the splash and the welcome screen is
+the whole of it.
 
 ## Contributing
 
