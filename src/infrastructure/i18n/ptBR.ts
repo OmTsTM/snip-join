@@ -209,7 +209,7 @@ export const ptBR: Catalogue = {
   'error.internal': 'Algo deu errado.',
   'error.dismiss': 'Fechar',
 
-  'error.networkFailed': 'Não foi possível alcançar o GitHub.',
+  'error.networkFailed': 'Não foi possível alcançar o GitHub. Verifique a conexão e tente de novo daqui a pouco.',
   'update.label': 'Procurar atualizações',
   'update.title': 'Atualizações',
   'update.checking': 'Perguntando ao GitHub qual é a versão mais nova…',

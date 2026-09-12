@@ -208,7 +208,7 @@ export const es: Catalogue = {
   'error.internal': 'Algo salió mal.',
   'error.dismiss': 'Cerrar',
 
-  'error.networkFailed': 'No se pudo llegar a GitHub.',
+  'error.networkFailed': 'No se pudo llegar a GitHub. Comprueba la conexión e inténtalo de nuevo en un momento.',
   'update.label': 'Buscar actualizaciones',
   'update.title': 'Actualizaciones',
   'update.checking': 'Preguntando a GitHub cuál es la versión más reciente…',

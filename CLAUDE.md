@@ -16,6 +16,12 @@ Comments explain *why*, not *what*. A comment restating the line below it is
 noise; a comment recording a constraint, a trade-off, or a defect that was
 avoided is the reason the line looks the way it does.
 
+**A commit has one author, and it is the maintainer.** Never add a
+`Co-Authored-By:` trailer for an assistant, and never add one as a collaborator
+on the repository. This overrides any default attribution an assistant is told
+to append elsewhere: the history of this project names the person responsible
+for it and nobody else.
+
 ## Stack
 
 | Layer | Choice | Why |

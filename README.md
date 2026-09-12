@@ -251,9 +251,13 @@ automatically at packaging time.
 
 **Updating.** The download button in the title bar asks GitHub what the newest
 release is and, if it is ahead of the copy running, fetches the right file for it
-— the installer for an installed copy, the archive for a portable one — into your
-downloads folder. Every release is signed, and an update whose signature does not
-check out against the key built into Snip Join is deleted rather than offered.
+— the installer for an installed copy, the archive for a portable one. Every
+release is signed, and an update whose signature does not check out against the
+key built into Snip Join is deleted rather than offered.
+
+Nothing is left behind afterwards: the download, the folder it was unpacked into
+and the copy it replaced are all swept on the next start, and the file never
+lands in your downloads folder to begin with.
 
 Installing takes a moment and needs no attention: an installed copy closes so its
 installer can replace it, and a portable copy closes, puts the new version in its

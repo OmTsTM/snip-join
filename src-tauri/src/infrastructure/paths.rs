@@ -105,6 +105,16 @@ pub fn scratch_root() -> PathBuf {
     }
 }
 
+/// Where an update is downloaded to.
+///
+/// The application's own scratch space rather than the user's downloads folder.
+/// An update is not something they asked to have: it is a means to an end that
+/// ends a minute later, and the releases page is where a copy worth keeping
+/// comes from. Here it can be swept without touching anything of theirs.
+pub fn updates_dir() -> PathBuf {
+    scratch_root().join("updates")
+}
+
 /// Removes scratch directories left behind by a previous run.
 ///
 /// A crash or a forced quit skips the drop that normally cleans up, so stale

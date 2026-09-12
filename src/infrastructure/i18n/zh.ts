@@ -203,7 +203,7 @@ export const zh: Catalogue = {
   'error.internal': '出了点问题。',
   'error.dismiss': '关闭',
 
-  'error.networkFailed': '无法连接到 GitHub。',
+  'error.networkFailed': '无法连接到 GitHub。请检查网络，稍后再试。',
   'update.label': '检查更新',
   'update.title': '更新',
   'update.checking': '正在向 GitHub 查询最新版本…',

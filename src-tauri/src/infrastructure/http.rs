@@ -55,12 +55,20 @@ fn client(connect: Duration, overall: Option<Duration>) -> AppResult<reqwest::Cl
 /// and reporting it as "you have the newest version" would be a lie told to
 /// someone who asked a question the application never managed to ask.
 pub async fn get_json(url: &str) -> AppResult<Option<Value>> {
-    let response = client(ASK_TIMEOUT, Some(ASK_TIMEOUT))?
-        .get(url)
-        .header("Accept", "application/vnd.github+json")
-        .send()
-        .await
-        .map_err(|error| AppError::NetworkFailed(error.to_string()))?;
+    let client = client(ASK_TIMEOUT, Some(ASK_TIMEOUT))?;
+
+    let response = match ask(&client, url).await {
+        Ok(response) => response,
+        // One more try, a second later. A name that did not resolve, a
+        // connection that was refused while a laptop finished waking its
+        // adapter, a captive portal answering the first request of the
+        // morning: none of those are worth telling somebody the update check
+        // failed over, and all of them are gone by the second attempt.
+        Err(_) => {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            ask(&client, url).await.map_err(|error| AppError::NetworkFailed(error.to_string()))?
+        }
+    };
 
     let status = response.status();
     if status == reqwest::StatusCode::NOT_FOUND {
@@ -75,6 +83,10 @@ pub async fn get_json(url: &str) -> AppResult<Option<Value>> {
     }
 
     response.json().await.map(Some).map_err(|error| AppError::NetworkFailed(error.to_string()))
+}
+
+async fn ask(client: &reqwest::Client, url: &str) -> Result<reqwest::Response, reqwest::Error> {
+    client.get(url).header("Accept", "application/vnd.github+json").send().await
 }
 
 /// Fetches a small text document, such as a signature.

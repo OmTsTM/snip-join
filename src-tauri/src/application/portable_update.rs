@@ -283,21 +283,57 @@ pub fn staging(version: &str) -> PathBuf {
 /// The prefix every staging folder carries, so they can be found again.
 const STAGING_PREFIX: &str = "snipjoin-update-";
 
-/// Removes what a previous update left behind, if anything.
+/// Removes everything an update leaves behind, and keeps asking until it is
+/// gone.
 ///
-/// Both halves: the outgoing executable beside the new one, and the folder the
-/// new one was unpacked into. Best effort throughout — the finisher may still
-/// be exiting, and a file it still holds is one this start simply leaves for the
-/// next.
-pub fn sweep(install: &Path) {
-    let _ = std::fs::remove_file(outgoing(install));
+/// Three things: the copy that was replaced, the folder the new one was unpacked
+/// into, and the file it was downloaded from. Together they are a couple of
+/// hundred megabytes of nothing, and none of it is the user's — an update is a
+/// means to an end that ended a minute ago.
+///
+/// On a thread, and patient, because the moment this runs is the moment none of
+/// them can be deleted yet: the finisher is still exiting from inside the
+/// staging folder, and an installer may still be running from the download. A
+/// file in use cannot be removed on Windows, and the answer is to ask again in a
+/// moment rather than to leave it lying there until somebody notices.
+pub fn tidy_up(install: Option<PathBuf>, downloads: PathBuf) {
+    std::thread::spawn(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
 
-    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return };
-    for entry in entries.flatten() {
-        if entry.file_name().to_string_lossy().starts_with(STAGING_PREFIX) {
-            let _ = std::fs::remove_dir_all(entry.path());
+        loop {
+            let mut left_behind = false;
+
+            if let Some(folder) = &install {
+                left_behind |= !remove_file(&outgoing(folder));
+            }
+
+            left_behind |= !remove_tree(&downloads);
+
+            if let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) {
+                for entry in entries.flatten() {
+                    if entry.file_name().to_string_lossy().starts_with(STAGING_PREFIX) {
+                        left_behind |= !remove_tree(&entry.path());
+                    }
+                }
+            }
+
+            if !left_behind || std::time::Instant::now() >= deadline {
+                return;
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(500));
         }
-    }
+    });
+}
+
+/// Whether the file is gone, having tried to remove it. Absent counts as gone.
+fn remove_file(path: &Path) -> bool {
+    std::fs::remove_file(path).is_ok() || !path.exists()
+}
+
+/// Whether the folder is gone, having tried to remove it.
+fn remove_tree(path: &Path) -> bool {
+    std::fs::remove_dir_all(path).is_ok() || !path.exists()
 }
 
 #[cfg(test)]
@@ -380,8 +416,12 @@ mod tests {
         // program next time either.
         assert!(outgoing(&install).is_file());
         assert!(executable_in(&install).unwrap().file_name().unwrap() == "SnipJoin.exe");
-        sweep(&install);
-        assert!(!outgoing(&install).is_file());
+
+        // And it goes on the next start, along with everything else the update
+        // used. Called directly rather than through `tidy_up`, which does this
+        // on a thread of its own.
+        assert!(remove_file(&outgoing(&install)));
+        assert!(!outgoing(&install).exists());
     }
 
     /// The half-way failure, which is the one that would leave somebody with a

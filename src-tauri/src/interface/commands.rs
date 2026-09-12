@@ -399,16 +399,6 @@ where
     results
 }
 
-/// Where an update is put while it is being fetched.
-///
-/// The user's downloads folder rather than the scratch space, and on purpose:
-/// they asked for this file, it is the same one they would have fetched from the
-/// releases page by hand, and it should be somewhere they can find it again — to
-/// keep, to check, or to run a second time if the first attempt went wrong.
-fn downloads_dir(app: &AppHandle) -> PathBuf {
-    app.path().download_dir().unwrap_or_else(|_| paths::scratch_root())
-}
-
 /// How this copy was put on the machine, and therefore how it is replaced.
 fn install_kind() -> update::InstallKind {
     if portable::is_portable() {
@@ -497,7 +487,7 @@ pub async fn download_update(
         .filter(|n| !n.is_empty())
         .ok_or_else(|| AppError::InvalidInput("that file has no name".into()))?;
 
-    let destination = downloads_dir(&app).join(file_name);
+    let destination = paths::updates_dir().join(file_name);
     let partial = destination.with_extension("part");
 
     // Asked for first: a signature that is not there is a reason not to spend

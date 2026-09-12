@@ -58,10 +58,14 @@ pub fn run() {
     // drop, so anything left behind by a previous session is swept at startup.
     infrastructure::paths::sweep_stale_scratch();
 
-    // And, if this start is the first after an update, the copy it replaced.
-    if let Some(folder) = infrastructure::portable::folder() {
-        application::portable_update::sweep(&folder);
-    }
+    // And, if this start is the first after an update, everything that update
+    // left behind: the copy it replaced, the folder it was unpacked into, and
+    // the file it came in. None of it can be deleted at this instant, which is
+    // why it is asked for on a thread that keeps asking.
+    application::portable_update::tidy_up(
+        infrastructure::portable::folder(),
+        infrastructure::paths::updates_dir(),
+    );
 
     // Windows passes a file here when the application is picked from "Open with"
     // or a video is dropped onto its shortcut.

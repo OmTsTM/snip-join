@@ -211,7 +211,7 @@ export const en = {
   'error.internal': 'Something went wrong.',
   'error.dismiss': 'Close',
 
-  'error.networkFailed': 'GitHub could not be reached.',
+  'error.networkFailed': 'GitHub could not be reached. Check the connection and try again in a moment.',
   'update.label': 'Check for updates',
   'update.title': 'Updates',
   'update.checking': 'Asking GitHub what the newest version is…',
