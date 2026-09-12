@@ -41,8 +41,8 @@ export const zh: Catalogue = {
   'selection.in': '起点',
   'selection.out': '终点',
   'selection.length': '时长',
-  'selection.setIn': '在此设为起点',
-  'selection.setOut': '在此设为终点',
+  'selection.setIn': '起点在此',
+  'selection.setOut': '终点在此',
   'selection.clear': '清除选区',
   'selection.remove': '移除选区',
   'selection.lift': '取出以便移动',
@@ -55,6 +55,7 @@ export const zh: Catalogue = {
   'join.off': '空缺会保留，导出时为黑屏和静音。',
 
   'project.save': '保存工程',
+  'project.new': '新建项目',
   'project.open': '打开工程',
   'project.recent': '接着上次继续',
   'project.forget': '从列表中移除',

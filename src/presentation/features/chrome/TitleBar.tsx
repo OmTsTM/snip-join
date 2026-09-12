@@ -11,7 +11,7 @@ import { LOCALES, LOCALE_NAMES, type Locale } from '@infrastructure/i18n'
 import { SKINS, useSkin, type Skin } from './skins'
 import { selectDuration, useEditor } from '@presentation/state/editorStore'
 import { displaySize } from '@domain/media'
-import { OpenAnother, OpenProject } from './OpenAnother'
+import { NewProject, OpenAnother, OpenProject } from './OpenAnother'
 import { UpdateButton } from './UpdateButton'
 import { formatTimecode } from '@domain/time'
 
@@ -34,10 +34,13 @@ const PROJECT_URL = 'https://github.com/OmTsTM/snip-join'
 export function TitleBar({
   onShowShortcuts,
   onBeforeReplace,
+  onNewProject,
 }: {
   readonly onShowShortcuts: () => void
   /** Asks about unsaved work; answers whether the application may be replaced. */
   readonly onBeforeReplace: () => Promise<boolean>
+  /** Puts the current project down, asking about unsaved work first. */
+  readonly onNewProject: () => void
 }) {
   const { t, locale, setLocale } = useI18n()
   const skin = useSkin((state) => state.skin)
@@ -116,6 +119,7 @@ export function TitleBar({
         control.
       */}
       <div className="flex shrink-0 items-center gap-0.5 pr-1">
+        {source && <NewProject onStart={onNewProject} />}
         <OpenProject />
         {source && <OpenAnother />}
 

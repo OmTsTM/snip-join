@@ -157,12 +157,17 @@ export function BlockList() {
 }
 
 /**
- * One row, and the handle that carries it.
+ * One row, which is also its own handle.
  *
  * Its own component because each row needs its own drag controls, and a hook
- * cannot be called inside a loop. The handle is the only thing that starts a
- * drag: the rest of the row is a button that seeks, and a row that moved
- * whenever it was pressed would make choosing a block a gamble.
+ * cannot be called inside a loop.
+ *
+ * The whole row picks up, not a grip beside the number. A grip is the honest
+ * affordance and it stays drawn, but as the only target it was a twenty-pixel
+ * square to aim at for a gesture whose whole point is that it is easier than the
+ * timeline. Pressing anywhere but the delete button starts the drag, and a press
+ * that goes nowhere is still a click: Motion only calls it a drag once the
+ * pointer has actually travelled, so choosing a block is unaffected.
  */
 function BlockRow({
   block,
@@ -187,13 +192,25 @@ function BlockRow({
   const controls = useDragControls()
   const [carrying, setCarrying] = useState(false)
 
+  /**
+   * Whether the press that is ending was a drag.
+   *
+   * A click fires on release whether or not the pointer travelled in between,
+   * so without this, letting go of a row you had just carried would also seek to
+   * it. Read on the way out and reset on the way in.
+   */
+  const travelled = useRef(false)
+
   return (
     <Reorder.Item
       value={block.id}
       data-block-row={block.id}
       dragListener={false}
       dragControls={controls}
-      onDragStart={() => setCarrying(true)}
+      onDragStart={() => {
+        travelled.current = true
+        setCarrying(true)
+      }}
       onDragEnd={() => {
         setCarrying(false)
         onDrop()
@@ -205,8 +222,16 @@ function BlockRow({
       className={cx('relative', carrying && 'z-10')}
     >
       <div
+        title={t('blocks.reorderRow')}
+        onPointerDown={(event) => {
+          travelled.current = false
+          // Everything but the button that removes the row: a drag that began
+          // on it would make deleting a block feel like a gamble.
+          if ((event.target as HTMLElement).closest('[data-no-drag]')) return
+          controls.start(event)
+        }}
         className={cx(
-          'group flex items-center gap-1.5 rounded-lg py-2 pl-1 pr-2',
+          'group flex cursor-grab touch-none items-center gap-1.5 rounded-lg py-2 pl-1 pr-2 active:cursor-grabbing',
           'transition-[background-color,box-shadow] duration-150',
           playing ? 'bg-raised' : 'hover:bg-raised/60',
           // Paper, matching the ring the chosen block wears on the timeline: the
@@ -215,22 +240,20 @@ function BlockRow({
           carrying && 'bg-raised-hi shadow-lg',
         )}
       >
-        <button
-          type="button"
-          // Pointer down, not a click: the drag has to begin while the button is
-          // still held, and `touch-none` keeps the gesture from being taken away
-          // by the panel's own scrolling.
-          onPointerDown={(event) => controls.start(event)}
-          title={t('blocks.reorderRow')}
-          aria-label={t('blocks.reorderRow')}
-          className="shrink-0 cursor-grab touch-none rounded-md p-1 text-faint opacity-0 transition-[opacity,color] duration-150 hover:text-paper focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
+        {/* The affordance, not the target: the row behind it is what carries. */}
+        <span
+          aria-hidden="true"
+          className="shrink-0 p-1 text-faint opacity-0 transition-opacity duration-150 group-hover:opacity-100"
         >
           <Grip size={14} />
-        </button>
+        </span>
 
         <button
           type="button"
-          onClick={onChoose}
+          onClick={() => {
+            if (travelled.current) return
+            onChoose()
+          }}
           className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
           title={t('blocks.number', { number: index + 1 })}
         >
@@ -257,6 +280,7 @@ function BlockRow({
 
         <button
           type="button"
+          data-no-drag
           onClick={onDelete}
           disabled={count <= 1}
           title={t('blocks.delete')}

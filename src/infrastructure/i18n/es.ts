@@ -43,8 +43,8 @@ export const es: Catalogue = {
   'selection.in': 'Inicio',
   'selection.out': 'Fin',
   'selection.length': 'Duración',
-  'selection.setIn': 'Marcar el inicio aquí',
-  'selection.setOut': 'Marcar el final aquí',
+  'selection.setIn': 'Inicio aquí',
+  'selection.setOut': 'Fin aquí',
   'selection.clear': 'Borrar selección',
   'selection.remove': 'Quitar selección',
   'selection.lift': 'Separar para mover',
@@ -58,6 +58,7 @@ export const es: Catalogue = {
   'join.off': 'El hueco se queda. Se exporta en negro y en silencio.',
 
   'project.save': 'Guardar proyecto',
+  'project.new': 'Nuevo proyecto',
   'project.open': 'Abrir un proyecto',
   'project.recent': 'Sigue donde lo dejaste',
   'project.forget': 'Quitar de esta lista',

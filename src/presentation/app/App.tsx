@@ -172,6 +172,20 @@ export function App() {
     }
   }, [askAboutUnsavedWork, leaveProject])
 
+  /**
+   * Leaves the current project for a blank one.
+   *
+   * Which is the welcome screen: a project with nothing in it is the front door,
+   * and there is no second kind of empty. The question about unsaved work is the
+   * one the close button asks, for the same reason and with the same three
+   * answers.
+   */
+  const startNewProject = useCallback(() => {
+    void askAboutUnsavedWork().then((proceed) => {
+      if (proceed) leaveProject()
+    })
+  }, [askAboutUnsavedWork, leaveProject])
+
   const saveThenProceed = useCallback(() => {
     void saveNow().then((written) => {
       // A dismissed picker is not a save, and going ahead on it would throw away
@@ -259,7 +273,11 @@ export function App() {
 
   return (
     <div className="app-ground flex h-full flex-col">
-      <TitleBar onShowShortcuts={showShortcuts} onBeforeReplace={askAboutUnsavedWork} />
+      <TitleBar
+        onShowShortcuts={showShortcuts}
+        onBeforeReplace={askAboutUnsavedWork}
+        onNewProject={startNewProject}
+      />
 
       {editing ? (
         <main className="flex min-h-0 flex-1 flex-col">

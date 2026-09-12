@@ -143,6 +143,34 @@ export const Folder = (props: IconProps) => (
   </Icon>
 )
 
+/** A blank sheet with a plus: start again from nothing. */
+export const NewProject = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M13.5 3.5H6.5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-4" />
+    <path d="M18.5 3.5v7M15 7h7" />
+  </Icon>
+)
+
+/**
+ * The two selection rails, each with the stretch it keeps beside it.
+ *
+ * Drawn to match what the timeline shows rather than borrowed from a transport:
+ * a rail, and the side of it the selection is on.
+ */
+export const MarkStart = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M7.5 4v16" />
+    <path d="M11.5 8.5h8v7h-8" />
+  </Icon>
+)
+
+export const MarkEnd = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M16.5 4v16" />
+    <path d="M12.5 8.5h-8v7h8" />
+  </Icon>
+)
+
 /** An arrow coming down into a tray: fetching something from elsewhere. */
 export const Download = (props: IconProps) => (
   <Icon {...props}>

@@ -1,7 +1,11 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { useCallback } from 'react'
 
-import { Folder, Project } from '@presentation/components/Icons'
+import {
+  Folder,
+  NewProject as NewProjectIcon,
+  Project,
+} from '@presentation/components/Icons'
 import { CHROME_CONTROL, CHROME_ICON } from '@presentation/features/chrome/controls'
 import { useProjectActions } from '@presentation/features/project/useProject'
 import { useT } from '@presentation/i18n/I18nProvider'
@@ -80,6 +84,32 @@ export function OpenAnother() {
     >
       <Folder size={CHROME_ICON} />
       {t('source.open')}
+    </button>
+  )
+}
+
+/**
+ * Puts the current project down and starts from nothing.
+ *
+ * Offered only while something is open, because from the welcome screen it is
+ * what you are already looking at. The unsaved question is the same one the
+ * close button asks — leaving an edit is leaving an edit, however it is spelled
+ * — and it is asked by the caller, which is the only place that knows what
+ * happens next.
+ */
+export function NewProject({ onStart }: { readonly onStart: () => void }) {
+  const t = useT()
+
+  return (
+    <button
+      type="button"
+      onClick={onStart}
+      title={t('project.new')}
+      aria-label={t('project.new')}
+      className={CHROME_CONTROL}
+    >
+      <NewProjectIcon size={CHROME_ICON} />
+      {t('project.new')}
     </button>
   )
 }

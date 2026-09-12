@@ -1,7 +1,7 @@
 import { motion } from 'motion/react'
 
 import { duration as spanDuration } from '@domain/time'
-import { Hole, Join, Scissors } from '@presentation/components/Icons'
+import { Hole, Join, MarkEnd, MarkStart, Scissors } from '@presentation/components/Icons'
 import { Button, cx, Switch } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { selectSelectionCovers, selectTimeline, useEditor } from '@presentation/state/editorStore'
@@ -74,11 +74,17 @@ export function SelectionPanel() {
         buttons going away were half of that; the timeline click was the other
         half, and it now keeps a selection it lands inside.
       */}
+      {/*
+        Drawn as buttons, because that is what they are. As quiet text they read
+        as a caption to the panel above them — two labels somebody had left
+        lying there — and the pair that sets a selection from the keyboard's
+        side is not something to have to guess is clickable.
+      */}
       <div className="flex gap-2">
-        <Button size="sm" tone="quiet" full onClick={markIn}>
+        <Button size="sm" tone="neutral" full icon={<MarkStart size={14} />} onClick={markIn}>
           {t('selection.setIn')}
         </Button>
-        <Button size="sm" tone="quiet" full onClick={markOut}>
+        <Button size="sm" tone="neutral" full icon={<MarkEnd size={14} />} onClick={markOut}>
           {t('selection.setOut')}
         </Button>
       </div>

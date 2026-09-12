@@ -43,8 +43,8 @@ export const ptBR: Catalogue = {
   'selection.in': 'Início',
   'selection.out': 'Fim',
   'selection.length': 'Duração',
-  'selection.setIn': 'Marcar o início aqui',
-  'selection.setOut': 'Marcar o fim aqui',
+  'selection.setIn': 'Início aqui',
+  'selection.setOut': 'Fim aqui',
   'selection.clear': 'Limpar seleção',
   'selection.remove': 'Remover seleção',
   'selection.lift': 'Destacar para mover',
@@ -58,6 +58,7 @@ export const ptBR: Catalogue = {
   'join.off': 'O buraco permanece. Ele sai preto e mudo na exportação.',
 
   'project.save': 'Salvar projeto',
+  'project.new': 'Novo projeto',
   'project.open': 'Abrir um projeto',
   'project.recent': 'Continue de onde parou',
   'project.forget': 'Tirar desta lista',

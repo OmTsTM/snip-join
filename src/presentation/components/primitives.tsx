@@ -22,7 +22,11 @@ const TONES: Record<ButtonTone, string> = {
   // The finished result, in the logo's own "Join" colour. Highest contrast on
   // screen, so it reads as the primary action without borrowing the cut colour.
   paper: 'bg-paper text-ink hover:bg-white active:bg-paper/90 shadow-[0_6px_20px_-12px_rgba(244,230,214,0.7)]',
-  neutral: 'bg-raised-hi text-paper hover:bg-line-bright border border-line-bright',
+  // `control`, not `raised-hi`: a raised surface is lighter than the ground in a
+  // dark skin and darker than it in a pale one, so the same token that lifts a
+  // button here presses it into the page there. This is the tone for anything
+  // that should read as a button without claiming to be the main action.
+  neutral: 'bg-control text-paper hover:bg-raised-hi border border-line-bright',
   quiet: 'text-muted hover:text-paper hover:bg-raised',
   // Red, and not a shade of orange: orange is cutting, which is deliberate and
   // undoable, while this is the button that loses work. Tinted rather than

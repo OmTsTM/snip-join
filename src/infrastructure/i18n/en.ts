@@ -47,8 +47,8 @@ export const en = {
   'selection.in': 'In',
   'selection.out': 'Out',
   'selection.length': 'Length',
-  'selection.setIn': 'Set the start here',
-  'selection.setOut': 'Set the end here',
+  'selection.setIn': 'Start here',
+  'selection.setOut': 'End here',
   'selection.clear': 'Clear selection',
   'selection.remove': 'Remove selection',
   'selection.lift': 'Lift out to move',
@@ -61,6 +61,7 @@ export const en = {
   'join.off': 'The hole stays. It exports as black with silence.',
 
   'project.save': 'Save project',
+  'project.new': 'New project',
   'project.open': 'Open a project',
   'project.recent': 'Pick up where you left off',
   'project.forget': 'Remove from this list',
