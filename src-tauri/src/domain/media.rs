@@ -54,6 +54,33 @@ pub struct AudioStream {
     pub bit_rate: Option<u64>,
 }
 
+/// What kind of material a source holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MediaKind {
+    /// Moving pictures. Its length is the file's own and cannot be exceeded.
+    Motion,
+    /// A single frame.
+    ///
+    /// A still has no length of its own — a container reports a fortieth of a
+    /// second for a PNG, which is why one used to land on the timeline two
+    /// pixels wide. The editor gives it a length instead, the export loops the
+    /// frame to fill it, and the only real limit is how far the preview copy
+    /// was built.
+    Still,
+}
+
+/// How long a still is when it first lands on the timeline.
+pub const STILL_DEFAULT_SECONDS: f64 = 5.0;
+
+/// How far a still may be stretched.
+///
+/// Also the length its preview copy is encoded at, so scrubbing can never run
+/// past the end of the picture. A minute is far longer than anyone holds a
+/// title card, and encoding a minute of one unchanging frame costs about a
+/// second because almost every macroblock is skipped.
+pub const STILL_MAX_SECONDS: f64 = 60.0;
+
 /// Whether the embedded web view can decode a source directly, or whether the
 /// editor has to build a proxy before it can be scrubbed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,7 +101,16 @@ pub struct MediaSource {
     pub size_bytes: u64,
     /// Comma-separated container short names exactly as reported by the prober.
     pub container: String,
+    /// How long a block of this medium is when it first lands on the timeline.
     pub duration: Instant,
+    /// The longest a block of this medium may be trimmed to.
+    ///
+    /// The same as `duration` for moving pictures — a file cannot show more
+    /// than it holds. For a still it is how far the frame may be stretched, and
+    /// the length its preview copy was built at, so the two can never disagree
+    /// about where scrubbing runs out.
+    pub max_duration: Instant,
+    pub kind: MediaKind,
     pub video: Option<VideoStream>,
     pub audio: Option<AudioStream>,
     pub playability: Playability,
@@ -87,6 +123,10 @@ impl MediaSource {
 
     pub fn has_audio(&self) -> bool {
         self.audio.is_some()
+    }
+
+    pub fn is_still(&self) -> bool {
+        self.kind == MediaKind::Still
     }
 }
 

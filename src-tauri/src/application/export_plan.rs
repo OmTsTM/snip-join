@@ -72,13 +72,17 @@ pub fn plan(
         return Err(AppError::UnsupportedMedia);
     }
 
-    // The spec is reconciled against the edit before anything is built. Two
-    // things rule out a stream copy: a hole, which has to be drawn, and a
-    // timeline drawing on more than one file, whose packets cannot be
-    // concatenated however alike the two encodings look. Producing a file with
-    // the hole missing, or with only the first file in it, would be the worst
-    // outcome available.
-    let spec = spec.clone().reconciled(!edit.is_contiguous() || edit.spans_multiple_media());
+    // The spec is reconciled against the edit before anything is built. Three
+    // things rule out a stream copy: a hole, which has to be drawn; a timeline
+    // drawing on more than one file, whose packets cannot be concatenated
+    // however alike the two encodings look; and a still, which is one packet
+    // that has to be looped into a stretch of video. Producing a file with the
+    // hole missing, with only the first file in it, or with a five second title
+    // card lasting one frame, would each be the worst outcome available.
+    let must_re_encode = !edit.is_contiguous()
+        || edit.spans_multiple_media()
+        || media.iter().any(MediaSource::is_still);
+    let spec = spec.clone().reconciled(must_re_encode);
     let output_duration = edit.duration();
 
     if spec.mode.re_encodes() {
@@ -167,7 +171,7 @@ mod tests {
     use super::*;
     use crate::domain::edl::Clip;
     use crate::domain::export::{EncoderBackend, UpscaleAlgorithm};
-    use crate::domain::media::{AudioStream, MediaSource, Playability, VideoStream};
+    use crate::domain::media::{AudioStream, MediaKind, MediaSource, Playability, VideoStream};
     use crate::domain::time::{Instant, TimeRange};
 
     fn capabilities() -> Capabilities {
@@ -186,6 +190,8 @@ mod tests {
             size_bytes: 1000,
             container: "mov,mp4".into(),
             duration: Instant::new(60.0).unwrap(),
+            max_duration: Instant::new(60.0).unwrap(),
+            kind: MediaKind::Motion,
             video: Some(VideoStream {
                 index: 0,
                 codec: "h264".into(),

@@ -8,6 +8,14 @@ use super::capabilities::Capabilities;
 use super::encoding;
 use super::filtergraph::{self, GraphOptions, AUDIO_OUT, VIDEO_OUT};
 
+/// Frame rate a still's preview copy is encoded at.
+///
+/// Low on purpose: nothing moves, so every frame after the first is skipped by
+/// the encoder anyway, and a lower rate is a shorter encode and a smaller file.
+/// Not lower than this, because a coarse rate makes the playhead visibly step
+/// while scrubbing.
+const PROXY_STILL_FRAME_RATE: f64 = 15.0;
+
 /// Longest edge a preview proxy is allowed to have.
 ///
 /// The proxy exists to be scrubbed, not admired. Capping it keeps the transcode
@@ -32,7 +40,8 @@ pub fn precise_export_args(
     let mut args = base_args();
     // One input per medium, in table order: a clip's `media` index is its
     // input index in the graph, so the two lists must not be reordered apart.
-    for source in media {
+    for (index, source) in media.iter().enumerate() {
+        args.extend(still_input_args(source, edit, index, options.frame_rate));
         args.extend(["-i".into(), source.path.clone()]);
     }
     args.extend(["-filter_complex".into(), graph]);
@@ -71,6 +80,46 @@ pub fn precise_export_args(
     args.extend(progress_args());
     args.push(output.to_string_lossy().into_owned());
     args
+}
+
+/// Input options that turn a single frame into a stream the graph can trim.
+///
+/// A still holds one packet. Without `-loop` the `trim` in the filter graph runs
+/// out after that one frame and the segment collapses to nothing, so a five
+/// second title card exports as a blink. `-t` is what bounds the loop: an
+/// infinite input has no end of its own and would keep the graph running after
+/// every other segment had finished.
+///
+/// The bound is the furthest into the still any clip reaches, plus a frame of
+/// margin, because `trim` reads the timestamp *before* its end and an input that
+/// stops exactly there can come up one frame short.
+fn still_input_args(
+    source: &MediaSource,
+    edit: &EditList,
+    index: usize,
+    frame_rate: f64,
+) -> Vec<String> {
+    if !source.is_still() {
+        return Vec::new();
+    }
+
+    let rate = if frame_rate > 0.1 { frame_rate } else { 30.0 };
+    let needed = edit
+        .clips()
+        .iter()
+        .filter(|clip| clip.media == index)
+        .map(|clip| clip.source.end().seconds())
+        .fold(0.0_f64, f64::max)
+        + 2.0 / rate;
+
+    vec![
+        "-loop".into(),
+        "1".into(),
+        "-framerate".into(),
+        format!("{rate:.6}"),
+        "-t".into(),
+        format!("{needed:.6}"),
+    ]
 }
 
 /// Builds the arguments that copy one range of the source without re-encoding.
@@ -131,6 +180,16 @@ pub fn proxy_args(source: &MediaSource, capabilities: &Capabilities, output: &Pa
         capabilities.resolve_encoder(VideoCodec::H264, crate::domain::export::EncoderBackend::Auto);
 
     let mut args = base_args();
+
+    // A still is encoded as a clip of its own longest allowed length, so the
+    // preview and the filmstrip work on it exactly as they do on a video and
+    // scrubbing can never run past the end of the picture.
+    if source.is_still() {
+        args.extend(["-loop".into(), "1".into()]);
+        args.extend(["-framerate".into(), format!("{PROXY_STILL_FRAME_RATE:.1}")]);
+        args.extend(["-t".into(), format!("{:.3}", source.max_duration.seconds())]);
+    }
+
     args.extend(["-i".into(), source.path.clone()]);
     args.extend(["-map".into(), "0:v:0".into()]);
     args.extend(["-map".into(), "0:a:0?".into()]);
@@ -236,9 +295,19 @@ pub fn concat_list_entry(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::edl::Clip;
     use crate::domain::export::{EncoderBackend, ExportMode, QualityTarget};
-    use crate::domain::media::{AudioStream, MediaSource, Playability, VideoStream};
+    use crate::domain::media::{AudioStream, MediaKind, MediaSource, Playability, VideoStream};
     use crate::domain::time::{Instant, TimeRange};
+
+    fn still(path: &str) -> MediaSource {
+        let mut source = source(false);
+        source.path = path.into();
+        source.kind = MediaKind::Still;
+        source.duration = Instant::new(5.0).unwrap();
+        source.max_duration = Instant::new(60.0).unwrap();
+        source
+    }
 
     fn capabilities() -> Capabilities {
         Capabilities {
@@ -256,6 +325,8 @@ mod tests {
             size_bytes: 1000,
             container: "mov,mp4".into(),
             duration: Instant::new(60.0).unwrap(),
+            max_duration: Instant::new(60.0).unwrap(),
+            kind: MediaKind::Motion,
             video: Some(VideoStream {
                 index: 0,
                 codec: "h264".into(),
@@ -415,5 +486,67 @@ mod tests {
     #[test]
     fn every_invocation_blocks_stdin() {
         assert!(base_args().contains(&"-nostdin".to_string()));
+    }
+
+    /// A still holds one packet. Without `-loop` the graph's `trim` runs out
+    /// after that frame and a five second title card exports as a blink.
+    #[test]
+    fn a_still_is_looped_for_as_long_as_the_timeline_asks() {
+        let media = vec![still("C:/art/card.png")];
+        let edit = EditList::new(vec![Clip::new(
+            0,
+            TimeRange::from_seconds(0.0, 8.0).unwrap(),
+            Instant::ZERO,
+        )])
+        .unwrap();
+
+        let args = precise_export_args(
+            &media,
+            &edit,
+            &ExportSpec::fast().reconciled(true),
+            &capabilities(),
+            Path::new("out.mp4"),
+        );
+
+        let loop_at = args.iter().position(|a| a == "-loop").expect("a still is looped");
+        let input_at = args.iter().position(|a| a == "-i").expect("the still is an input");
+        assert!(loop_at < input_at, "input options have to precede the input they apply to");
+
+        // Bounded, or the looped input never ends and the graph runs after every
+        // other segment has finished. A frame of margin, because `trim` reads
+        // the timestamp before its end.
+        let bound: f64 = args[args.iter().position(|a| a == "-t").unwrap() + 1].parse().unwrap();
+        assert!(bound > 8.0, "the loop must reach the far edge of the longest clip");
+        assert!(bound < 8.2, "and not run far past it");
+    }
+
+    #[test]
+    fn moving_pictures_are_never_looped() {
+        let media = vec![source(true)];
+        let edit = EditList::new(vec![Clip::new(
+            0,
+            TimeRange::from_seconds(0.0, 8.0).unwrap(),
+            Instant::ZERO,
+        )])
+        .unwrap();
+
+        let args = precise_export_args(
+            &media,
+            &edit,
+            &ExportSpec::fast().reconciled(true),
+            &capabilities(),
+            Path::new("out.mp4"),
+        );
+        assert!(!args.contains(&"-loop".to_string()));
+    }
+
+    /// The preview copy is built at the still's longest allowed length, so
+    /// scrubbing can never run past the end of the picture.
+    #[test]
+    fn a_stills_proxy_covers_everything_it_can_be_stretched_to() {
+        let args = proxy_args(&still("C:/art/card.png"), &capabilities(), Path::new("p.mp4"));
+        assert!(args.contains(&"-loop".to_string()));
+        let bound: f64 = args[args.iter().position(|a| a == "-t").unwrap() + 1].parse().unwrap();
+        assert_eq!(bound, 60.0);
     }
 }

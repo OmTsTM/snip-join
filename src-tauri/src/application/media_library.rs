@@ -71,7 +71,7 @@ fn fnv_step(hash: u64, byte: u8) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::media::{MediaSource, VideoStream};
+    use crate::domain::media::{MediaKind, MediaSource, VideoStream};
     use crate::domain::time::Instant;
 
     fn source(path: &str, playability: Playability, with_video: bool) -> MediaSource {
@@ -81,6 +81,8 @@ mod tests {
             size_bytes: 100,
             container: "matroska".into(),
             duration: Instant::new(10.0).unwrap(),
+            max_duration: Instant::new(10.0).unwrap(),
+            kind: MediaKind::Motion,
             video: with_video.then(|| VideoStream {
                 index: 0,
                 codec: "hevc".into(),

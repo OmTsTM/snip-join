@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     fn deep_sources_keep_their_bit_depth_only_on_codecs_that_allow_it() {
-        use crate::domain::media::{MediaSource, Playability, VideoStream};
+        use crate::domain::media::{MediaKind, MediaSource, Playability, VideoStream};
 
         let deep = MediaSource {
             path: "a".into(),
@@ -610,6 +610,8 @@ mod tests {
             size_bytes: 0,
             container: "mov,mp4".into(),
             duration: Instant::new(10.0).unwrap(),
+            max_duration: Instant::new(10.0).unwrap(),
+            kind: MediaKind::Motion,
             video: Some(VideoStream {
                 index: 0,
                 codec: "hevc".into(),

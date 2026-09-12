@@ -138,6 +138,44 @@ async fn second_fixture() -> PathBuf {
     path
 }
 
+/// A single green picture, as a real PNG on disk.
+///
+/// Green rather than one of the fixture's own bands would be ambiguous, so this
+/// is deliberately the same green: what the assertions turn on is the *length*
+/// the still is stretched to, which no video in this suite could produce by
+/// accident.
+async fn still_fixture() -> PathBuf {
+    let path = workspace().join("card.png");
+    if path.exists() {
+        return path;
+    }
+
+    let tools = locator::tools().expect("FFmpeg must be installed to run these tests");
+    let args: Vec<String> = [
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=green:s=320x180",
+        "-frames:v",
+        "1",
+        &path.to_string_lossy(),
+    ]
+    .iter()
+    .map(|a| a.to_string())
+    .collect();
+
+    runner::run_capturing_stdout(&tools.ffmpeg, &args)
+        .await
+        .expect("the still fixture could not be produced");
+
+    path
+}
+
 /// Container duration of a produced file, in seconds.
 async fn duration_of(path: &Path) -> f64 {
     let tools = locator::tools().unwrap();
@@ -583,4 +621,94 @@ async fn asking_to_copy_a_two_file_timeline_re_encodes_instead() {
         plan.effective_mode.re_encodes(),
         "a copy was asked for and silently producing half the timeline would be worse"
     );
+}
+
+/// A still is one packet. Everything about putting it on a timeline depends on
+/// that packet being looped: without it a five second title card exports as a
+/// single frame, which is the shape the defect took on the timeline too — a
+/// block two pixels wide because a PNG reports a fortieth of a second.
+#[tokio::test]
+async fn a_still_exports_for_as_long_as_its_block_asks() {
+    let still = probe::probe(&still_fixture().await).await.expect("the still must probe");
+    assert!(still.is_still(), "a PNG is a single frame, whatever its container reports");
+    assert_eq!(still.duration.seconds(), 5.0, "and the editor gives it an editable length");
+
+    // Six seconds, which is longer than the length it arrives with: a still has
+    // no length of its own to run out of.
+    let edit = EditList::new(vec![Clip::new(
+        0,
+        TimeRange::from_seconds(0.0, 6.0).unwrap(),
+        Instant::ZERO,
+    )])
+    .unwrap();
+
+    let spec = ExportSpec {
+        mode: ExportMode::Precise,
+        quality: QualityTarget::Balanced,
+        ..ExportSpec::fast()
+    };
+
+    let output = export_media(&[still], &edit, spec, "still.mp4").await;
+
+    let duration = duration_of(&output).await;
+    assert!((duration - 6.0).abs() < 0.4, "expected a six second result, got {duration}");
+    assert_eq!(dominant(colour_at(&output, 5.5).await), "green", "the picture lasts the whole way");
+}
+
+/// The mixed case is the one that actually happens: a title card in front of
+/// the footage. It also proves the still is normalised onto the first medium's
+/// size and rate, which is what `concat` silently corrupts without.
+#[tokio::test]
+async fn a_still_can_sit_on_a_timeline_beside_a_video() {
+    let video = probe::probe(&fixture().await).await.expect("the fixture must probe");
+    let still = probe::probe(&still_fixture().await).await.expect("the still must probe");
+
+    // Three seconds of the card, then three of the video's blue band.
+    let edit = EditList::new(vec![
+        Clip::new(1, TimeRange::from_seconds(0.0, 3.0).unwrap(), Instant::ZERO),
+        Clip::new(0, TimeRange::from_seconds(22.0, 25.0).unwrap(), Instant::new(3.0).unwrap()),
+    ])
+    .unwrap();
+
+    let spec = ExportSpec {
+        mode: ExportMode::Precise,
+        quality: QualityTarget::Balanced,
+        ..ExportSpec::fast()
+    };
+
+    let output = export_media(&[video, still], &edit, spec, "still-and-video.mp4").await;
+
+    assert!((duration_of(&output).await - 6.0).abs() < 0.5, "six seconds out of a card and a clip");
+    assert_eq!(dominant(colour_at(&output, 1.5).await), "green", "the card leads");
+    assert_eq!(dominant(colour_at(&output, 4.5).await), "blue", "the footage follows it");
+}
+
+/// A stream copy cannot loop one packet into a stretch of video, so asking for
+/// one has to be promoted rather than honoured — the alternative is a title
+/// card that lasts a single frame in the finished file.
+#[tokio::test]
+async fn asking_to_copy_a_still_re_encodes_instead() {
+    let still = probe::probe(&still_fixture().await).await.expect("the still must probe");
+
+    let edit = EditList::new(vec![Clip::new(
+        0,
+        TimeRange::from_seconds(0.0, 4.0).unwrap(),
+        Instant::ZERO,
+    )])
+    .unwrap();
+
+    let caps = capabilities::capabilities().await.expect("capabilities");
+    let output = workspace().join("still-copy-refused.mp4");
+    let plan = export_plan::plan(
+        &[still],
+        &edit,
+        &ExportSpec::fast(),
+        caps,
+        &output,
+        &workspace(),
+        "test-still-copy",
+    )
+    .expect("the export must plan");
+
+    assert_ne!(plan.effective_mode, ExportMode::Fast, "a still cannot be stream copied");
 }

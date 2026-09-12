@@ -146,8 +146,16 @@ pub async fn generate_thumbnails(
         return Ok(());
     }
 
-    let count = count.clamp(1, MAX_THUMBNAILS);
-    let positions = thumbnailer::sample_positions(source.duration.seconds(), count);
+    // Nothing changes across a still, so one frame is its whole filmstrip. Asking
+    // for eighty would spawn eighty processes to decode the same picture, and
+    // seventy-nine of them would come back empty: there is nothing to seek to
+    // past the single packet the file holds.
+    let positions = if source.is_still() {
+        vec![0.0]
+    } else {
+        let count = count.clamp(1, MAX_THUMBNAILS);
+        thumbnailer::sample_positions(source.duration.seconds(), count)
+    };
 
     // A bounded window rather than one task per frame: the cap is what keeps
     // memory and process count flat regardless of how long the video is.
@@ -204,6 +212,13 @@ pub async fn keyframe_positions(
     let source = media_named(&state, &path)?;
     if !source.has_video() {
         return Ok(KeyframeReport { positions: vec![], truncated: false });
+    }
+
+    // A still is looped frame by frame on export, so every instant is a cut
+    // point. `truncated` is exactly that claim, and it saves a process launch
+    // that would report the file's single packet.
+    if source.is_still() {
+        return Ok(KeyframeReport { positions: vec![], truncated: true });
     }
 
     let found = keyframes::probe(std::path::Path::new(&source.path)).await?;

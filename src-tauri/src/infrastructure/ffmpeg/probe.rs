@@ -3,7 +3,10 @@ use std::path::Path;
 use serde::Deserialize;
 
 use crate::application::error::{AppError, AppResult};
-use crate::domain::media::{classify_playability, AudioStream, MediaSource, VideoStream};
+use crate::domain::media::{
+    classify_playability, AudioStream, MediaKind, MediaSource, Playability, VideoStream,
+    STILL_DEFAULT_SECONDS, STILL_MAX_SECONDS,
+};
 use crate::domain::time::Instant;
 
 use super::locator;
@@ -54,7 +57,7 @@ fn build_source(path: &Path, report: ProbeReport) -> AppResult<MediaSource> {
 
     // The container duration is authoritative; a stream duration is the fallback
     // for formats that do not carry one at the container level, such as raw TS.
-    let duration_seconds = format
+    let probed_seconds = format
         .duration
         .as_deref()
         .and_then(|d| d.parse::<f64>().ok())
@@ -68,14 +71,34 @@ fn build_source(path: &Path, report: ProbeReport) -> AppResult<MediaSource> {
         })
         .unwrap_or(0.0);
 
+    let container = format.format_name.unwrap_or_default();
+    let kind = if is_still(&container, &report.streams, audio.as_ref()) {
+        MediaKind::Still
+    } else {
+        MediaKind::Motion
+    };
+
+    // A still's own duration is meaningless — a PNG reports a fortieth of a
+    // second, which is where a two-pixel block on the timeline came from — so
+    // the editor's length replaces it rather than being layered on top of it.
+    let (duration_seconds, max_seconds) = match kind {
+        MediaKind::Still => (STILL_DEFAULT_SECONDS, STILL_MAX_SECONDS),
+        MediaKind::Motion => (probed_seconds, probed_seconds),
+    };
+
     if duration_seconds <= 0.0 {
         return Err(AppError::ProbeFailed(
             "the file reports no duration, so it cannot be trimmed".into(),
         ));
     }
 
-    let container = format.format_name.unwrap_or_default();
-    let playability = classify_playability(&container, video.as_ref(), audio.as_ref());
+    // A single frame is never something the web view can play back: there is no
+    // video track to drive, so the preview copy is not optional here the way it
+    // is for an unusual codec.
+    let playability = match kind {
+        MediaKind::Still => Playability::NeedsProxy,
+        MediaKind::Motion => classify_playability(&container, video.as_ref(), audio.as_ref()),
+    };
 
     Ok(MediaSource {
         path: path.to_string_lossy().into_owned(),
@@ -83,10 +106,54 @@ fn build_source(path: &Path, report: ProbeReport) -> AppResult<MediaSource> {
         size_bytes: format.size.as_deref().and_then(|s| s.parse::<u64>().ok()).unwrap_or(0),
         container,
         duration: Instant::saturating(duration_seconds),
+        max_duration: Instant::saturating(max_seconds),
+        kind,
         video,
         audio,
         playability,
     })
+}
+
+/// Containers that only ever hold one picture.
+///
+/// FFmpeg demuxes still images through per-format "pipe" demuxers, so the
+/// container name is the strongest signal there is. Deliberately excluding
+/// `gif`: an animated one is a real video and has to stay one.
+const STILL_CONTAINERS: &[&str] = &[
+    "image2",
+    "png_pipe",
+    "jpeg_pipe",
+    "webp_pipe",
+    "bmp_pipe",
+    "tiff_pipe",
+    "jpegls_pipe",
+    "pgm_pipe",
+    "ppm_pipe",
+    "pam_pipe",
+    "psd_pipe",
+    "svg_pipe",
+    "qoi_pipe",
+];
+
+/// Whether a source holds a single frame rather than moving pictures.
+///
+/// Two signals, and either is enough. The container name catches the ordinary
+/// cases; the frame count catches a still wearing a video container, which is
+/// what a one-frame GIF or a single-picture MP4 is. Sound rules it out outright:
+/// whatever else a file with audio is, it has a length of its own.
+fn is_still(container: &str, streams: &[ProbeStream], audio: Option<&AudioStream>) -> bool {
+    if audio.is_some() {
+        return false;
+    }
+
+    if container.split(',').map(str::trim).any(|name| STILL_CONTAINERS.contains(&name)) {
+        return true;
+    }
+
+    streams
+        .iter()
+        .filter(|s| s.codec_type.as_deref() == Some("video") && !s.is_cover_art())
+        .any(|s| s.frame_count() == Some(1))
 }
 
 fn to_video_stream(stream: &ProbeStream) -> VideoStream {
@@ -171,6 +238,7 @@ struct ProbeStream {
     r_frame_rate: Option<String>,
     bit_rate: Option<String>,
     duration: Option<String>,
+    nb_frames: Option<String>,
     sample_rate: Option<String>,
     channels: Option<u32>,
     channel_layout: Option<String>,
@@ -203,6 +271,11 @@ impl ProbeStream {
     /// as the source video would show a still image for an audio file.
     fn is_cover_art(&self) -> bool {
         self.disposition.attached_pic == 1
+    }
+
+    /// How many frames the stream declares, when it declares any.
+    fn frame_count(&self) -> Option<u64> {
+        self.nb_frames.as_deref()?.trim().parse().ok()
     }
 
     fn frame_rate(&self) -> f64 {
@@ -311,6 +384,80 @@ mod tests {
         let video = source.video.unwrap();
         assert_eq!(video.rotation, 90);
         assert_eq!(video.display_size(), (1080, 1920));
+    }
+
+    #[test]
+    fn a_png_is_a_still_and_gets_an_editable_length() {
+        let report = report_from(
+            r#"{
+              "streams": [
+                {"index":0,"codec_type":"video","codec_name":"png","width":1920,"height":1080,
+                 "pix_fmt":"rgba","avg_frame_rate":"25/1","nb_frames":"1"}
+              ],
+              "format": {"format_name":"png_pipe","duration":"0.040000","size":"250000"}
+            }"#,
+        );
+
+        let source = build_source(Path::new("card.png"), report).unwrap();
+        assert_eq!(source.kind, MediaKind::Still);
+        // Not the fortieth of a second the container claims: that is what made a
+        // still land on the timeline two pixels wide.
+        assert_eq!(source.duration.seconds(), STILL_DEFAULT_SECONDS);
+        assert_eq!(source.max_duration.seconds(), STILL_MAX_SECONDS);
+        assert_eq!(source.playability, Playability::NeedsProxy);
+    }
+
+    #[test]
+    fn a_single_frame_inside_a_video_container_is_still_a_still() {
+        let report = report_from(
+            r#"{
+              "streams": [
+                {"index":0,"codec_type":"video","codec_name":"h264","width":640,"height":480,
+                 "pix_fmt":"yuv420p","avg_frame_rate":"30/1","nb_frames":"1"}
+              ],
+              "format": {"format_name":"mov,mp4","duration":"0.033","size":"9000"}
+            }"#,
+        );
+
+        assert_eq!(build_source(Path::new("one.mp4"), report).unwrap().kind, MediaKind::Still);
+    }
+
+    /// An animated GIF is a video however short it is, and treating it as a
+    /// frozen frame would drop every frame after the first.
+    #[test]
+    fn an_animated_gif_stays_moving_pictures() {
+        let report = report_from(
+            r#"{
+              "streams": [
+                {"index":0,"codec_type":"video","codec_name":"gif","width":320,"height":240,
+                 "pix_fmt":"bgra","avg_frame_rate":"10/1","nb_frames":"48"}
+              ],
+              "format": {"format_name":"gif","duration":"4.8","size":"120000"}
+            }"#,
+        );
+
+        let source = build_source(Path::new("loop.gif"), report).unwrap();
+        assert_eq!(source.kind, MediaKind::Motion);
+        assert_eq!(source.duration.seconds(), 4.8);
+    }
+
+    /// Sound settles it on its own: whatever else a file with audio is, it has a
+    /// length of its own that the editor must not replace.
+    #[test]
+    fn a_file_with_sound_is_never_a_still() {
+        let report = report_from(
+            r#"{
+              "streams": [
+                {"index":0,"codec_type":"video","codec_name":"mjpeg","width":640,"height":480,
+                 "nb_frames":"1"},
+                {"index":1,"codec_type":"audio","codec_name":"aac","sample_rate":"48000",
+                 "channels":2}
+              ],
+              "format": {"format_name":"image2","duration":"12.0","size":"9000"}
+            }"#,
+        );
+
+        assert_eq!(build_source(Path::new("odd.mov"), report).unwrap().kind, MediaKind::Motion);
     }
 
     #[test]
