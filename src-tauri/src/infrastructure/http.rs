@@ -61,19 +61,78 @@ fn because(error: &dyn std::error::Error) -> String {
     reason
 }
 
-fn client(connect: Duration, overall: Option<Duration>) -> AppResult<reqwest::Client> {
+/// Whether a request may follow a redirect, or is asking where one leads.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Redirects {
+    Follow,
+    Report,
+}
+
+fn client(
+    connect: Duration,
+    overall: Option<Duration>,
+    redirects: Redirects,
+    ignore_proxy: bool,
+) -> AppResult<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
         .user_agent(USER_AGENT)
         .connect_timeout(connect)
-        // GitHub answers an asset download with a redirect to its storage. A
-        // handful is normal; an endless chain is not.
-        .redirect(reqwest::redirect::Policy::limited(5));
+        .redirect(match redirects {
+            // GitHub answers an asset download with a redirect to its storage.
+            // A handful is normal; an endless chain is not.
+            Redirects::Follow => reqwest::redirect::Policy::limited(5),
+            Redirects::Report => reqwest::redirect::Policy::none(),
+        });
+
+    if ignore_proxy {
+        builder = builder.no_proxy();
+    }
 
     if let Some(overall) = overall {
         builder = builder.timeout(overall);
     }
 
     builder.build().map_err(|error| AppError::NetworkFailed(because(&error)))
+}
+
+/// Makes a request, and tries again without the system's proxy if it fails.
+///
+/// A proxy that Windows still names and nothing answers on is one of the
+/// commonest ways a machine loses the internet for one application at a time: a
+/// VPN or a security suite sets one up on `127.0.0.1`, is uninstalled without
+/// clearing the setting, and every program that reads that setting afterwards
+/// gets "tunnel error … the target machine actively refused it" while the
+/// browser, which was told to ignore it, carries on working. Going direct on the
+/// second attempt costs one request and rescues every one of those machines.
+///
+/// The attempt also doubles as the retry that a name server which did not answer
+/// the first time deserves.
+///
+/// The first failure is the one reported: it describes the path the machine was
+/// configured to take, which is the part somebody can act on.
+async fn reach(
+    url: &str,
+    accept: Option<&str>,
+    connect: Duration,
+    overall: Option<Duration>,
+    redirects: Redirects,
+) -> AppResult<reqwest::Response> {
+    let send = |ignore_proxy: bool| async move {
+        let client = client(connect, overall, redirects, ignore_proxy)?;
+        let mut request = client.get(url);
+        if let Some(accept) = accept {
+            request = request.header("Accept", accept);
+        }
+        request.send().await.map_err(|error| AppError::NetworkFailed(because(&error)))
+    };
+
+    let reason = match send(false).await {
+        Ok(response) => return Ok(response),
+        Err(reason) => reason,
+    };
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    send(true).await.map_err(|_| reason)
 }
 
 /// Fetches a small JSON document, or nothing if the server says there is none.
@@ -83,20 +142,14 @@ fn client(connect: Duration, overall: Option<Duration>) -> AppResult<reqwest::Cl
 /// and reporting it as "you have the newest version" would be a lie told to
 /// someone who asked a question the application never managed to ask.
 pub async fn get_json(url: &str) -> AppResult<Option<Value>> {
-    let client = client(ASK_TIMEOUT, Some(ASK_TIMEOUT))?;
-
-    let response = match ask(&client, url).await {
-        Ok(response) => response,
-        // One more try, a second later. A name that did not resolve, a
-        // connection that was refused while a laptop finished waking its
-        // adapter, a captive portal answering the first request of the
-        // morning: none of those are worth telling somebody the update check
-        // failed over, and all of them are gone by the second attempt.
-        Err(_) => {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            ask(&client, url).await.map_err(|error| AppError::NetworkFailed(because(&error)))?
-        }
-    };
+    let response = reach(
+        url,
+        Some("application/vnd.github+json"),
+        ASK_TIMEOUT,
+        Some(ASK_TIMEOUT),
+        Redirects::Follow,
+    )
+    .await?;
 
     let status = response.status();
     if status == reqwest::StatusCode::NOT_FOUND {
@@ -113,17 +166,9 @@ pub async fn get_json(url: &str) -> AppResult<Option<Value>> {
     response.json().await.map(Some).map_err(|error| AppError::NetworkFailed(because(&error)))
 }
 
-async fn ask(client: &reqwest::Client, url: &str) -> Result<reqwest::Response, reqwest::Error> {
-    client.get(url).header("Accept", "application/vnd.github+json").send().await
-}
-
 /// Fetches a small text document, such as a signature.
 pub async fn get_text(url: &str) -> AppResult<String> {
-    let response = client(ASK_TIMEOUT, Some(ASK_TIMEOUT))?
-        .get(url)
-        .send()
-        .await
-        .map_err(|error| AppError::NetworkFailed(because(&error)))?;
+    let response = reach(url, None, ASK_TIMEOUT, Some(ASK_TIMEOUT), Redirects::Follow).await?;
 
     let status = response.status();
     if !status.is_success() {
@@ -142,18 +187,9 @@ pub async fn get_text(url: &str) -> AppResult<String> {
 /// Used to ask the releases page which release is newest when the API host
 /// cannot be reached at all.
 pub async fn redirect_target(url: &str) -> AppResult<Option<String>> {
-    let client = reqwest::Client::builder()
-        .user_agent(USER_AGENT)
-        .connect_timeout(ASK_TIMEOUT)
-        .timeout(ASK_TIMEOUT)
-        // The answer is the redirect itself, so following it would throw away
-        // the only thing being asked for.
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|error| AppError::NetworkFailed(because(&error)))?;
-
-    let response =
-        client.get(url).send().await.map_err(|error| AppError::NetworkFailed(because(&error)))?;
+    // Reported rather than followed: the answer being asked for *is* the
+    // redirect.
+    let response = reach(url, None, ASK_TIMEOUT, Some(ASK_TIMEOUT), Redirects::Report).await?;
 
     Ok(response
         .headers()
@@ -173,11 +209,7 @@ pub async fn download(
     into: &Path,
     mut on_progress: impl FnMut(u64, u64),
 ) -> AppResult<PathBuf> {
-    let mut response = client(CONNECT_TIMEOUT, None)?
-        .get(url)
-        .send()
-        .await
-        .map_err(|error| AppError::NetworkFailed(because(&error)))?;
+    let mut response = reach(url, None, CONNECT_TIMEOUT, None, Redirects::Follow).await?;
 
     let status = response.status();
     if !status.is_success() {

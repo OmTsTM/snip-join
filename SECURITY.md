@@ -101,7 +101,10 @@ the whole project reach the internet, and this is all of them:
   `https://github.com/OmTsTM/snip-join/releases/latest` the same question —
   some networks know the site and not its API. Then, only if the user presses
   download, one file from
-  `https://github.com/OmTsTM/snip-join/releases/download/…`. That prefix is
+  `https://github.com/OmTsTM/snip-join/releases/download/…`. A request that
+  fails is tried once more without whatever proxy the system names, because a
+  proxy that is configured and no longer answers is a common way for one
+  application to lose the internet while the browser keeps working. That prefix is
   checked in `application/update.rs` before a byte is fetched: the addresses
   arrive in a JSON document from the network, so they are untrusted input, and
   without the check a tampered reply could point the download at any host and

@@ -446,6 +446,13 @@ wrong one would leave two Snip Joins on the machine, one of them in the registry
   names are then built from this project's own release convention, which is safe
   because a download that is not there fails as a download, and the signature
   still has to check out either way.
+- **A configured proxy that nothing answers on is a real failure mode.** A VPN
+  or a security suite sets one up on `127.0.0.1`, is uninstalled without clearing
+  the Windows setting, and every program that reads it gets `tunnel error … the
+  target machine actively refused it` while the browser carries on. Every request
+  here is tried once more with `no_proxy()` for that reason; a machine that
+  genuinely needs its proxy succeeds on the first attempt and never reaches the
+  second.
 - **`reqwest::Error` hides the reason in its source chain.** Printing it alone
   says "error sending request for url (…)" for a name server, a TLS stack and a
   firewall alike, which are three problems with three answers. `because()` walks
