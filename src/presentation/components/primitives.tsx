@@ -24,7 +24,11 @@ const TONES: Record<ButtonTone, string> = {
   paper: 'bg-paper text-ink hover:bg-white active:bg-paper/90 shadow-[0_6px_20px_-12px_rgba(244,230,214,0.7)]',
   neutral: 'bg-raised-hi text-paper hover:bg-line-bright border border-line-bright',
   quiet: 'text-muted hover:text-paper hover:bg-raised',
-  danger: 'text-muted hover:text-paper hover:bg-raised border border-transparent hover:border-line-bright',
+  // Red, and not a shade of orange: orange is cutting, which is deliberate and
+  // undoable, while this is the button that loses work. Tinted rather than
+  // filled, so it warns without competing with the action being recommended.
+  danger:
+    'bg-alarm/12 text-alarm-ink border border-alarm/35 hover:bg-alarm hover:text-white hover:border-alarm',
 }
 
 const SIZES = {

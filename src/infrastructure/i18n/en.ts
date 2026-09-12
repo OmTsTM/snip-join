@@ -227,6 +227,9 @@ export const en = {
   'shortcuts.cut': 'Cut the block',
   'shortcuts.paste': 'Paste at the playhead',
   'shortcuts.reorder': 'Move the block along the order',
+  'shortcuts.openVideo': 'Open a video',
+  'shortcuts.openProject': 'Open a project',
+  'shortcuts.close': 'Close the project, or quit',
 
   'language.label': 'Language',
   'skin.label': 'Appearance',

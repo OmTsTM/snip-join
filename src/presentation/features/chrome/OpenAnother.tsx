@@ -2,6 +2,7 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { useCallback } from 'react'
 
 import { Folder, Project } from '@presentation/components/Icons'
+import { CHROME_CONTROL, CHROME_ICON } from '@presentation/features/chrome/controls'
 import { useProjectActions } from '@presentation/features/project/useProject'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { useEditor } from '@presentation/state/editorStore'
@@ -75,9 +76,9 @@ export function OpenAnother() {
       onClick={() => void choose()}
       title={t('source.open')}
       aria-label={t('source.open')}
-      className="no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-muted transition-colors duration-150 hover:bg-raised hover:text-paper"
+      className={CHROME_CONTROL}
     >
-      <Folder size={13} />
+      <Folder size={CHROME_ICON} />
       {t('source.open')}
     </button>
   )
@@ -100,9 +101,9 @@ export function OpenProject() {
       onClick={() => void openExisting()}
       title={t('project.open')}
       aria-label={t('project.open')}
-      className="no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-muted transition-colors duration-150 hover:bg-raised hover:text-paper"
+      className={CHROME_CONTROL}
     >
-      <Project size={13} />
+      <Project size={CHROME_ICON} />
       {t('project.open')}
     </button>
   )

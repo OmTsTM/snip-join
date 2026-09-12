@@ -224,6 +224,9 @@ export const es: Catalogue = {
   'shortcuts.cut': 'Cortar el bloque',
   'shortcuts.paste': 'Pegar en el cursor',
   'shortcuts.reorder': 'Mover el bloque en el orden',
+  'shortcuts.openVideo': 'Abrir un vídeo',
+  'shortcuts.openProject': 'Abrir un proyecto',
+  'shortcuts.close': 'Cerrar el proyecto, o salir',
 
   'language.label': 'Idioma',
   'skin.label': 'Apariencia',

@@ -75,7 +75,7 @@ export function UnsavedDialog({ open, onSave, onDiscard, onCancel }: UnsavedDial
             </div>
 
             <div className="flex items-center gap-2 border-t border-line px-5 py-3">
-              <Button size="sm" tone="quiet" onClick={onDiscard}>
+              <Button size="sm" tone="danger" onClick={onDiscard}>
                 {t('project.discard')}
               </Button>
               <div className="flex-1" />

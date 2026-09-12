@@ -29,9 +29,16 @@ import { beginDragScroll, endDragScroll } from './dragScroll'
 import { Filmstrip } from './Filmstrip'
 import { pixelsToTime, timeToPixels } from './geometry'
 
-/** Height of the grab handle, in pixels. It does not grow with the dock: it is
- *  a grip, and a taller one would only take room from the picture. */
-export const HANDLE_HEIGHT = 20
+/**
+ * Height of the grab handle, in pixels.
+ *
+ * It does not grow with the dock: it is a grip, and one that grew would take the
+ * picture with it. Twenty was too mean to aim at, though — it is the only way to
+ * pick a block up with a pointer, and a target a fifth of an inch tall asks the
+ * user to be precise about something they should not have to think about. The
+ * floor of the dock still leaves a filmstrip of forty-two pixels under it.
+ */
+export const HANDLE_HEIGHT = 28
 
 /** How close a drag must come to an edge before it snaps, in pixels. */
 const SNAP_PIXELS = 8

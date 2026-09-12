@@ -51,6 +51,20 @@
   --color-muted: #8d9299;
   --color-faint: #5c6269;
 
+  /* The surface a floating control sits on: the transport's play button, and
+     anything else that has to read as standing above the ground rather than
+     cut into it. Its own role because "raised" is only lighter than the ground
+     in a dark skin — on a pale one the same token is darker, which turns every
+     control it paints into a dent. */
+  --color-control: #1e2226;
+
+  /* Losing work, which is not the same thing as cutting.
+     Orange is deliberate and undoable; this is the colour of an answer that
+     throws something away, and it is the same red the window's close button
+     already answers to. `alarm-ink` is the readable version of it. */
+  --color-alarm: #c0392b;
+  --color-alarm-ink: #e57368;
+
   --font-display: 'Bricolage Grotesque Variable', 'Segoe UI', system-ui, sans-serif;
   --font-sans: 'Instrument Sans Variable', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Mono', monospace;
@@ -58,6 +72,12 @@
   /* The lift at the top of the application ground, so the wash is a token the
      skins can move rather than a number buried in a gradient. */
   --color-ground-lift: #14181c;
+
+  /* What the video's frame casts onto the band beneath it. A token because it
+     is the one shadow on screen large enough to be read as depth, and a black
+     one on a pale ground puts the transport in a pit — the picture floats and
+     everything under it looks a storey lower. Each skin says how much. */
+  --shadow-stage: 0 30px 70px -40px rgba(0, 0, 0, 0.95);
 
   --radius-panel: 14px;
   --radius-block: 8px;
@@ -90,7 +110,12 @@
   --color-muted: #bcc5d0;
   --color-faint: #8f99a6;
 
+  --color-control: #2b333c;
+  --color-alarm: #c0392b;
+  --color-alarm-ink: #ef8377;
+
   --color-ground-lift: #313b46;
+  --shadow-stage: 0 24px 56px -40px rgba(0, 0, 0, 0.75);
 }
 
 /*
@@ -122,7 +147,17 @@
   --color-muted: #58534b;
   --color-faint: #787165;
 
+  /* Lighter than the ground, where the dark skins are darker than it. Same
+     role, opposite direction, which is the whole point of naming roles. */
+  --color-control: #fffdf8;
+  --color-alarm: #c0392b;
+  --color-alarm-ink: #a32b1f;
+
   --color-ground-lift: #fffdf8;
+  /* Barely there. On a cream ground a drop shadow is the only thing that can
+     make two bands of the same surface look like different storeys, and the
+     border already says where the picture ends. */
+  --shadow-stage: 0 10px 26px -22px rgba(70, 55, 38, 0.35);
 }
 
 @layer base {

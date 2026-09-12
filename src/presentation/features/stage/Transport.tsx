@@ -46,7 +46,10 @@ export function Transport() {
           title={playing ? t('transport.pause') : t('transport.play')}
           className={cx(
             'mx-1 inline-flex h-11 w-11 items-center justify-center rounded-full',
-            'border border-line-bright bg-raised-hi text-paper',
+            // `control`, not `raised`: this button has to read as standing on
+            // the ground rather than pressed into it, and which direction that
+            // is depends on whether the ground is dark or pale.
+            'border border-line-bright bg-control text-paper',
             'transition-[background-color,transform] duration-150 hover:bg-line-bright active:scale-95',
           )}
         >

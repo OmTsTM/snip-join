@@ -229,6 +229,9 @@ The size is remembered between sessions.
 | `Esc` | Clear the selection |
 | `Ctrl` + `Z` / `Y` | Undo / redo |
 | `Ctrl` + `E` | Export |
+| `Ctrl` + `O` | Open a video |
+| `Ctrl` + `N` | Open a project |
+| `Ctrl` + `W` | Close the project, or quit from the welcome screen |
 | `Ctrl` + wheel | Zoom the timeline around the pointer |
 | `↑` `↓` on the divider | Resize the timeline |
 

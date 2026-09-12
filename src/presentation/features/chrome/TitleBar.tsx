@@ -5,6 +5,7 @@ import { useCallback } from 'react'
 import brandMark from '@presentation/assets/brand-mark.png'
 import { Close, Globe, Keyboard, Maximize, Minimize, Palette } from '@presentation/components/Icons'
 import { cx } from '@presentation/components/primitives'
+import { CHROME_CONTROL, CHROME_ICON } from './controls'
 import { useI18n } from '@presentation/i18n/I18nProvider'
 import { LOCALES, LOCALE_NAMES, type Locale } from '@infrastructure/i18n'
 import { SKINS, useSkin, type Skin } from './skins'
@@ -28,17 +29,6 @@ import { formatTimecode } from '@domain/time'
  * a third.
  */
 const PROJECT_URL = 'https://github.com/OmTsTM/snip-join'
-
-/**
- * The class every control in the title bar is written in.
- *
- * `muted`, not `faint`. These are the only controls on screen with no panel
- * behind them, sitting on the darkest band the interface has, and `faint` left
- * them at about three to one against it — legible if you already knew they were
- * there. It is a role rather than a colour, so every skin lifts them by its own
- * lights rather than by this one's.
- */
-const CHROME_TEXT = 'text-muted transition-colors duration-150 hover:bg-raised hover:text-paper'
 
 export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => void }) {
   const { t, locale, setLocale } = useI18n()
@@ -107,25 +97,33 @@ export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => 
 
       {!source && <div data-tauri-drag-region className="flex-1" />}
 
-      {/* Opening a project is offered whether or not anything is loaded: it is
-          the way back into work, and the welcome screen is exactly where that
-          is wanted. Adding a file is only meaningful once there is a project to
-          add it to. */}
-      <OpenProject />
-      {source && <OpenAnother />}
+      {/*
+        One strip, evenly spaced.
 
-      <button
-        type="button"
-        onClick={onShowShortcuts}
-        title={t('shortcuts.show')}
-        aria-label={t('shortcuts.show')}
-        className={cx('inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md', CHROME_TEXT)}
-      >
-        <Keyboard size={14} />
-      </button>
+        Opening a project is offered whether or not anything is loaded: it is
+        the way back into work, and the welcome screen is exactly where that is
+        wanted. Adding a file is only meaningful once there is a project to add
+        it to — so the row's contents change, and a gap that has to look right
+        either way is a gap that belongs to the group rather than to each
+        control.
+      */}
+      <div className="flex shrink-0 items-center gap-0.5 pr-1">
+        <OpenProject />
+        {source && <OpenAnother />}
 
-      <SkinPicker current={skin} onPick={setSkin} label={t('skin.label')} />
-      <LanguagePicker current={locale} onPick={setLocale} label={t('language.label')} />
+        <button
+          type="button"
+          onClick={onShowShortcuts}
+          title={t('shortcuts.show')}
+          aria-label={t('shortcuts.show')}
+          className={CHROME_CONTROL}
+        >
+          <Keyboard size={CHROME_ICON} />
+        </button>
+
+        <SkinPicker current={skin} onPick={setSkin} label={t('skin.label')} />
+        <LanguagePicker current={locale} onPick={setLocale} label={t('language.label')} />
+      </div>
 
       <div className="flex h-full shrink-0">
         <WindowButton label={t('window.minimize')} onClick={minimize}>
@@ -179,14 +177,9 @@ function LanguagePicker({
   readonly label: string
 }) {
   return (
-    <div className="group relative mr-1 shrink-0">
-      <button
-        type="button"
-        title={label}
-        aria-label={label}
-        className={cx('inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px]', CHROME_TEXT)}
-      >
-        <Globe size={13} />
+    <div className="group relative shrink-0">
+      <button type="button" title={label} aria-label={label} className={CHROME_CONTROL}>
+        <Globe size={CHROME_ICON} />
         {LOCALE_NAMES[current]}
       </button>
 
@@ -231,13 +224,8 @@ function SkinPicker({
 
   return (
     <div className="group relative shrink-0">
-      <button
-        type="button"
-        title={label}
-        aria-label={label}
-        className={cx('inline-flex h-7 w-7 items-center justify-center rounded-md', CHROME_TEXT)}
-      >
-        <Palette size={14} />
+      <button type="button" title={label} aria-label={label} className={CHROME_CONTROL}>
+        <Palette size={CHROME_ICON} />
       </button>
 
       <div className="invisible absolute right-0 top-full z-40 w-36 translate-y-1 rounded-lg border border-line bg-panel p-1 opacity-0 shadow-2xl transition-[opacity,visibility] duration-150 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">

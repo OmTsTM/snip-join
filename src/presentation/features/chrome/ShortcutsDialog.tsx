@@ -32,6 +32,10 @@ const SHORTCUTS: ReadonlyArray<{ keys: readonly string[]; label: MessageKey }> =
   { keys: ['Ctrl', 'A'], label: 'selection.selectAll' },
   { keys: ['Ctrl', '+', 'scroll'], label: 'shortcuts.zoom' },
   { keys: ['Ctrl', 'E'], label: 'shortcuts.export' },
+  // The session rather than the edit, so they sit apart from it at the end.
+  { keys: ['Ctrl', 'O'], label: 'shortcuts.openVideo' },
+  { keys: ['Ctrl', 'N'], label: 'shortcuts.openProject' },
+  { keys: ['Ctrl', 'W'], label: 'shortcuts.close' },
 ]
 
 /**

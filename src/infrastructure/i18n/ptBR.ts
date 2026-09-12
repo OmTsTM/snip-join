@@ -225,6 +225,9 @@ export const ptBR: Catalogue = {
   'shortcuts.cut': 'Recortar o bloco',
   'shortcuts.paste': 'Colar no cursor',
   'shortcuts.reorder': 'Mover o bloco na ordem',
+  'shortcuts.openVideo': 'Abrir um vídeo',
+  'shortcuts.openProject': 'Abrir um projeto',
+  'shortcuts.close': 'Fechar o projeto, ou sair',
 
   'language.label': 'Idioma',
   'skin.label': 'Aparência',

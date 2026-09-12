@@ -111,9 +111,28 @@ Two things do not move with the skin:
 - **The splash.** It is a two and a half second brand moment with its own inline
   stylesheet, and it stays the window at dusk.
 
+Two roles exist because a dark skin and a pale one need opposite answers:
+
+- **`control`** is the surface a floating control stands on — the transport's
+  play button. `raised` cannot do this job: it is lighter than the ground in a
+  dark skin and darker than it in a pale one, so painting a button with it turns
+  the button into a dent the moment the lights come up.
+- **`alarm`** is losing work, which is not the same as cutting. Orange is
+  deliberate and undoable; this is the answer that throws something away, and it
+  is the red the window's close button already answers to. `alarm-ink` is the
+  readable version, since the same red is not legible on both grounds.
+
+`--shadow-stage` is the video frame's drop shadow, and it is a token for the
+same reason: it is the only shadow on screen big enough to be read as depth, and
+the black one the dark skin wants puts the transport in a pit on a pale ground —
+the picture floats and everything under it looks a storey lower.
+
 The title bar's controls are `text-muted`, never `text-faint`: they are the only
 controls on screen with no panel behind them, sitting on the darkest band the
-interface has, and `faint` left them at about three to one against it.
+interface has, and `faint` left them at about three to one against it. They all
+share one class from `features/chrome/controls.ts`, because the strip is read as
+a row before it is read as five separate things: mixed paddings and two icon
+sizes are what made it look shuffled.
 
 ## Colour rule
 
@@ -306,6 +325,11 @@ media falls back to the ordinary locations rather than failing every write.
   behaves the same at every zoom. Footage whose list came back `truncated` is
   never snapped at all: it can be cut anywhere, and the list is only its first
   twenty thousand points.
+- **The grab handle is the only way to pick a block up with a pointer.** The
+  body is deliberately inert — a drag across it marks a selection like anywhere
+  else on the track — so `HANDLE_HEIGHT` is the entire target, and at twenty
+  pixels it was asking for precision about something nobody should have to think
+  about. It is 28, which the dock's floor still affords a filmstrip under.
 - **A block's drawn width must not have a usable floor.** A floor wide enough to
   grab is a floor that lies about where the block ends, and several short blocks
   side by side each get drawn over the next — indistinguishable from an overlap.
@@ -320,11 +344,17 @@ media falls back to the ordinary locations rather than failing every write.
   (`translateY(-11px) scale(0.93)`, a heavy shadow) and the slot it will drop
   into being outlined underneath. A timid lift is worse than none: it looks
   exactly like the bug.
-- **The release has to be heard on the window.** Pointer capture is meant to
-  deliver it to the handle wherever the pointer is, and it does not survive the
-  card being transformed out from under it mid-drag. Losing it leaves the block
-  held — still lifted, still following, with no way to put it down — so
-  `BlockCard` also listens on `window` while a drag is running.
+- **The whole drag has to be heard on the window, not just the release.**
+  Pointer capture is meant to deliver every move to the element that was
+  pressed, and it does not survive this card: the block is re-ordered in a keyed
+  list as it travels, so its node is moved in the document and Chromium drops
+  the capture. What is left works only while the pointer happens to stay over
+  the handle — which is exactly what a purely sideways drag does, the card
+  following underneath it — so the defect looked like "moving the pointer down
+  jams the drag" and hid for a round. `BlockCard` listens for `pointermove`,
+  `pointerup` and `pointercancel` on `window` for as long as a drag is running,
+  and reads its placement function through a ref so the subscription is not torn
+  down and rebuilt sixty times a second.
 - **A trim must not be animated.** The width is the block's length and the
   pointer is setting it, so a transition means the drawn edge lags the drag by
   its own duration: on a fast shrink the card is still wide while the filmstrip
@@ -343,6 +373,15 @@ media falls back to the ordinary locations rather than failing every write.
   out first. `TimelineDock` scrolls; `BlockCard` replays its placement on the
   resulting `scroll` event, because the canvas moving under a stationary pointer
   fires no `pointermove` of its own.
+
+- **The preview frame is measured, never calculated from the layout.** It was
+  once capped by `calc((100vh - 300px) * ratio)`, with the height of everything
+  else on screen written in as a number: true the day it was written and wrong
+  from the first time a band moved, after which the frame kept a width its
+  height no longer allowed, stopped matching the picture's shape, and drew the
+  video letterboxed inside its own border. A `ResizeObserver` on the area and
+  the largest box of that shape that fits it. The shape follows the medium under
+  the playhead, not the project's first file.
 
 ## Projects
 
@@ -364,6 +403,24 @@ per-session counters with no meaning outside the run that minted them.
   window closing *at all*, silently, including from the title bar.
 - Autosave only writes a project that already has a path. Choosing a name and a
   place on the user's behalf while they are editing is not a rescue.
+- **Opening a project prepares every medium, not only the first.** A project is
+  the one place several files arrive at once, and the preview is what the player
+  reads: with only the first prepared, a project whose blocks all came from the
+  second file reopened with the edit intact and a blank player. The first is
+  awaited because `ready` means "there is something to watch"; the rest follow
+  behind it. `state/project.test.ts` drives the round trip.
+- **Closing the editor is not quitting.** One window does two jobs — the welcome
+  screen with its recent projects, and the edit — and the close button means "I
+  am done with this one", which is usually the moment before opening another.
+  With nothing open the close request is left alone and the application really
+  does quit. `Ctrl`+`W` asks the window to close rather than deciding for
+  itself, so it lands in the same place.
+- **In development, an HMR update to the store can leave a stale close handler.**
+  The old module's listener holds the old store, which reads as "nothing open",
+  so it does not object and the window is destroyed — the application appears to
+  quit instead of returning to the welcome screen. It cannot happen in a build,
+  where nothing is ever re-evaluated; restart `pnpm app:dev` before believing
+  it.
 
 ## Security posture
 

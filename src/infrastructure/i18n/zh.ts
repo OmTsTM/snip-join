@@ -219,6 +219,9 @@ export const zh: Catalogue = {
   'shortcuts.cut': '剪切片段',
   'shortcuts.paste': '粘贴到播放头',
   'shortcuts.reorder': '在顺序中移动片段',
+  'shortcuts.openVideo': '打开视频',
+  'shortcuts.openProject': '打开项目',
+  'shortcuts.close': '关闭项目或退出',
 
   'language.label': '语言',
   'skin.label': '外观',

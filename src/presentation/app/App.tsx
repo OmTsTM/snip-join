@@ -15,6 +15,7 @@ import { Preview } from '@presentation/features/stage/Preview'
 import { Transport } from '@presentation/features/stage/Transport'
 import { DockResizer } from '@presentation/features/timeline/DockResizer'
 import { TimelineDock } from '@presentation/features/timeline/TimelineDock'
+import { useOpenVideo } from '@presentation/features/chrome/OpenAnother'
 import { Welcome } from '@presentation/features/welcome/Welcome'
 import { UnsavedDialog } from '@presentation/features/project/UnsavedDialog'
 import { AUTOSAVE_INTERVAL_MS, useProjectActions } from '@presentation/features/project/useProject'
@@ -43,7 +44,8 @@ export function App() {
 
   const dirty = useEditor(selectDirty)
   const projectPath = useEditor((state) => state.projectPath)
-  const { saveNow } = useProjectActions()
+  const { saveNow, openExisting } = useProjectActions()
+  const chooseVideo = useOpenVideo()
 
   // Guarded here rather than only on the button, so the keyboard cannot reach
   // the dialog for a timeline that would produce no file.
@@ -51,7 +53,19 @@ export function App() {
     if (useEditor.getState().history.present.blocks.length > 0) setExportOpen(true)
   }, [])
   const showShortcuts = useCallback(() => setShortcutsOpen((open) => !open), [])
-  useShortcuts({ onExport: showExport, onShowShortcuts: showShortcuts })
+
+  // Asking the window to close, rather than closing anything here: the handler
+  // below is the one place that knows what closing means, and the keyboard
+  // should not learn it a second time.
+  const requestClose = useCallback(() => void getCurrentWindow().close(), [])
+
+  useShortcuts({
+    onExport: showExport,
+    onShowShortcuts: showShortcuts,
+    onOpenVideo: () => void chooseVideo(),
+    onOpenProject: () => void openExisting(),
+    onClose: requestClose,
+  })
 
   // One subscription for the whole application, torn down on unmount so a hot
   // reload cannot stack duplicate listeners.

@@ -24,8 +24,11 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function useShortcuts(options: {
   readonly onExport: () => void
   readonly onShowShortcuts: () => void
+  readonly onOpenVideo: () => void
+  readonly onOpenProject: () => void
+  readonly onClose: () => void
 }) {
-  const { onExport, onShowShortcuts } = options
+  const { onExport, onShowShortcuts, onOpenVideo, onOpenProject, onClose } = options
 
   useEffect(() => {
     function handle(event: KeyboardEvent) {
@@ -74,6 +77,21 @@ export function useShortcuts(options: {
           case 'e':
             event.preventDefault()
             onExport()
+            return
+          case 'o':
+            event.preventDefault()
+            onOpenVideo()
+            return
+          case 'n':
+            event.preventDefault()
+            onOpenProject()
+            return
+          case 'w':
+            // Asks the window to close rather than closing anything itself, so
+            // it goes through the same question about unsaved work, and lands
+            // in the same place, as the button in the corner.
+            event.preventDefault()
+            onClose()
             return
           default:
             return
@@ -152,5 +170,5 @@ export function useShortcuts(options: {
 
     window.addEventListener('keydown', handle)
     return () => window.removeEventListener('keydown', handle)
-  }, [onExport, onShowShortcuts])
+  }, [onClose, onExport, onOpenProject, onOpenVideo, onShowShortcuts])
 }

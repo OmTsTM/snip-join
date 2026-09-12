@@ -57,7 +57,7 @@ export function Preview() {
     <div className="flex min-h-0 flex-1 p-6">
       <div ref={area} className="relative min-h-0 min-w-0 flex-1">
         <div
-          className="absolute left-1/2 top-1/2 overflow-hidden rounded-xl border border-line bg-ink-deep shadow-[0_30px_70px_-40px_rgba(0,0,0,0.95)]"
+          className="absolute left-1/2 top-1/2 overflow-hidden rounded-xl border border-line bg-ink-deep shadow-[var(--shadow-stage)]"
           style={{
             width: size?.width ?? 0,
             height: size?.height ?? 0,
