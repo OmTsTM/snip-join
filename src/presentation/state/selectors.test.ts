@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  selectActiveBlock,
   selectActiveMedia,
   selectBlockAtPlayhead,
+  selectHasCutPoints,
+  selectSelectionCovers,
   selectIsProxy,
   selectPreviewUrl,
   selectCanRedo,
@@ -31,6 +34,9 @@ describe('every exported selector is reference-stable', () => {
     selectCanUndo,
     selectCanRedo,
     selectBlockAtPlayhead,
+    selectActiveBlock,
+    selectSelectionCovers,
+    selectHasCutPoints,
     selectActiveMedia,
     selectPreviewUrl,
     selectIsProxy,

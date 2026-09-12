@@ -246,3 +246,58 @@ export const Keyboard = (props: IconProps) => (
     <path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M6.5 13.5h.01M17 13.5h.01M9.5 13.5h5" />
   </Icon>
 )
+
+/** Two sheets, one behind the other: the block menu's copy. */
+export const Copy = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3" />
+  </Icon>
+)
+
+/** A sheet coming off a clipboard: the block menu's paste. */
+export const Paste = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M9 4.5H7a2 2 0 0 0-2 2V18a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6.5a2 2 0 0 0-2-2h-2" />
+    <rect x="9" y="2.8" width="6" height="3.4" rx="1.2" />
+    <path d="M8.5 12.5h7" />
+    <path d="M8.5 16h4.5" />
+  </Icon>
+)
+
+/** One more of the same piece, placed beside it. */
+export const Duplicate = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="3.5" y="7" width="8" height="10" rx="1.6" />
+    <rect x="13" y="7" width="8" height="10" rx="1.6" />
+    <path d="M17 10.5v3" />
+    <path d="M15.5 12h3" />
+  </Icon>
+)
+
+/** A block trading places with the one before it. */
+export const MoveLeft = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M10 7.5 5.5 12 10 16.5" />
+    <path d="M5.5 12H14" />
+    <path d="M18.5 5.5v13" />
+  </Icon>
+)
+
+/** A block trading places with the one after it. */
+export const MoveRight = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M14 7.5 18.5 12 14 16.5" />
+    <path d="M18.5 12H10" />
+    <path d="M5.5 5.5v13" />
+  </Icon>
+)
+
+/** A single frame: the mark for a still in the media pool. */
+export const Image = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="3.5" y="5" width="17" height="14" rx="2" />
+    <circle cx="9" cy="10" r="1.6" />
+    <path d="M4.5 16.5 9.5 12l4 3.5 3-2.5 3.5 3" />
+  </Icon>
+)

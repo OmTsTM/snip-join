@@ -3,6 +3,18 @@
 export const TIMELINE_PADDING = 16
 
 /**
+ * Empty canvas kept past the end of the last block.
+ *
+ * Somewhere to drag into. Without it the canvas stops exactly where the footage
+ * does, so a block at the far right of a long timeline cannot be made longer:
+ * the pointer runs out of window, and there is nothing further along to scroll
+ * to either, because the scrollable width ends at the same instant the edge
+ * being dragged does. `fitScale` accounts for it, so fitting still leaves no
+ * scrollbar.
+ */
+export const TIMELINE_TRAIL = 120
+
+/**
  * Intervals a ruler is allowed to use, in seconds.
  *
  * Restricted to values people actually count in. An automatically derived
@@ -76,10 +88,22 @@ export function pixelsToTime(offset: number, pixelsPerSecond: number): number {
   return Math.max(0, (offset - TIMELINE_PADDING) / pixelsPerSecond)
 }
 
-/** The scale at which a whole video fits the available width. */
+/** The width the canvas takes for a timeline of this length. */
+export function canvasWidth(duration: number, pixelsPerSecond: number): number {
+  return TIMELINE_PADDING * 2 + Math.max(0, duration) * pixelsPerSecond + TIMELINE_TRAIL
+}
+
+/**
+ * The scale at which a whole video fits the available width.
+ *
+ * The trailing room is subtracted along with the padding, so a fitted timeline
+ * fills the viewport exactly and no scrollbar appears for space that holds
+ * nothing.
+ */
 export function fitScale(duration: number, viewportWidth: number): number {
   if (duration <= 0 || viewportWidth <= 0) return 40
-  return Math.max(0.5, (viewportWidth - TIMELINE_PADDING * 2) / duration)
+  const usable = viewportWidth - TIMELINE_PADDING * 2 - TIMELINE_TRAIL
+  return Math.max(0.5, usable / duration)
 }
 
 /**

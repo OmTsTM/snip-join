@@ -19,9 +19,28 @@ export const VIDEO_EXTENSIONS = [
   '3gp', '3g2', 'asf', 'rm', 'rmvb', 'divx', 'mxf', 'dv', 'gif',
 ]
 
-/** Opens the native picker and loads whatever was chosen. */
+/**
+ * Still images, offered as a filter of their own.
+ *
+ * A separate entry rather than more names in the list above: a still behaves
+ * differently once it is on the timeline — it has no length of its own, so the
+ * editor gives it one — and a picker that says so is the first place a user
+ * finds that out.
+ */
+export const IMAGE_EXTENSIONS = [
+  'png', 'jpg', 'jpeg', 'jfif', 'webp', 'bmp', 'tif', 'tiff', 'avif', 'heic',
+]
+
+/**
+ * Opens the native picker and brings whatever was chosen into the project.
+ *
+ * Added, not opened in place. The editor holds a pool of files now, so
+ * reaching for another one and losing the edit you had is never what was meant
+ * — `addMedia` still opens it outright when nothing is loaded yet, which is the
+ * only case where there is nothing to lose.
+ */
 export function useOpenVideo() {
-  const openFile = useEditor((state) => state.openFile)
+  const addMedia = useEditor((state) => state.addMedia)
 
   return useCallback(async () => {
     const selected = await open({
@@ -29,19 +48,21 @@ export function useOpenVideo() {
       directory: false,
       filters: [
         { name: 'Video', extensions: VIDEO_EXTENSIONS },
+        { name: 'Image', extensions: IMAGE_EXTENSIONS },
         { name: 'All files', extensions: ['*'] },
       ],
     })
 
-    if (typeof selected === 'string') await openFile(selected)
-  }, [openFile])
+    if (typeof selected === 'string') await addMedia(selected)
+  }, [addMedia])
 }
 
 /**
- * Swaps the open video for another one.
+ * Brings another file into the project.
  *
  * Lives in the title bar because the editor has no menu bar, and without it the
- * only way to work on a second clip would be to restart the application.
+ * only way in is the folder button beside the media list, which is below the
+ * fold on a short window.
  */
 export function OpenAnother() {
   const t = useT()

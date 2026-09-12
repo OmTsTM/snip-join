@@ -15,8 +15,20 @@ export function Transport() {
   const duration = useEditor(selectDuration)
 
   return (
-    <div className="relative flex shrink-0 items-center justify-center gap-5 px-6 pb-5">
-      <Readout />
+    /*
+      Three columns rather than a centred row.
+
+      The volume belongs beside the other things you reach for while watching,
+      not pinned to the far corner of a window that can be two thousand pixels
+      wide. Putting it in the row would have pushed the play button off the
+      middle of the picture, which is the one thing this layout has to hold, so
+      the sides are equal fractions and the controls sit in a column of their
+      own: whatever either side carries, the centre stays centred.
+    */
+    <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 pb-5">
+      <div className="flex justify-end">
+        <Readout />
+      </div>
 
       <div className="flex items-center gap-1">
         <IconButton label={t('transport.toStart')} onClick={() => seek(0)}>
@@ -46,20 +58,18 @@ export function Transport() {
         </IconButton>
       </div>
 
-      <div className="timecode w-[132px] text-right text-[12px] text-faint">
-        <button
-          type="button"
-          onClick={() => seek(duration)}
-          title={t('transport.toEnd')}
-          className="transition-colors duration-150 hover:text-muted"
-        >
-          {formatTimecode(duration)}
-        </button>
-      </div>
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="timecode text-[12px] text-faint">
+          <button
+            type="button"
+            onClick={() => seek(duration)}
+            title={t('transport.toEnd')}
+            className="transition-colors duration-150 hover:text-muted"
+          >
+            {formatTimecode(duration)}
+          </button>
+        </div>
 
-      {/* Absolute, so adding a fourth item does not shift the transport off
-          centre: the play button stays under the middle of the picture. */}
-      <div className="absolute right-6 top-1/2 -translate-y-1/2">
         <VolumeControl />
       </div>
     </div>
@@ -76,7 +86,7 @@ function Readout() {
   const playhead = useEditor((state) => state.playhead)
 
   return (
-    <div className="timecode w-[132px] text-[15px] font-medium tabular-nums text-paper">
+    <div className="timecode text-[15px] font-medium tabular-nums text-paper">
       {formatTimecode(playhead)}
     </div>
   )

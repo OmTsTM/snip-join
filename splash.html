@@ -23,6 +23,8 @@
         --muted: #8d9299;
         --faint: #5c6269;
         --dusk: #1b406b;
+        --dusk-lift: #5b87bc;
+        --dusk-bright: #7fa8d8;
       }
 
       * {
@@ -139,12 +141,44 @@
         }
       }
 
+      /*
+       * The credit line, which is also the only address this application ever
+       * asks to open.
+       *
+       * Underlined and dusk at rest rather than only under the pointer: a
+       * control that looks like body text until you happen to hover it is a
+       * control nobody finds, and this window is on screen for two and a half
+       * seconds. Dusk, not orange — orange is the colour of cutting, and this
+       * removes nothing. The same reasoning as the editor's own credit line.
+       */
       .by {
         position: absolute;
         bottom: 14px;
+        padding: 2px 4px;
+        border: 0;
+        border-radius: 4px;
+        background: none;
+        font: inherit;
         font-size: 10.5px;
         letter-spacing: 0.02em;
-        color: var(--faint);
+        color: var(--dusk-lift);
+        text-decoration: underline;
+        text-decoration-color: rgba(91, 135, 188, 0.45);
+        text-underline-offset: 3px;
+        cursor: pointer;
+        transition:
+          color 150ms ease,
+          text-decoration-color 150ms ease;
+      }
+
+      .by:hover {
+        color: var(--dusk-bright);
+        text-decoration-color: var(--dusk-bright);
+      }
+
+      .by:focus-visible {
+        outline: 2px solid var(--snip);
+        outline-offset: 1px;
       }
 
       @media (prefers-reduced-motion: reduce) {
@@ -163,7 +197,7 @@
       <p class="version" id="version"></p>
       <p class="tagline" id="tagline"></p>
       <div class="bar"><i></i></div>
-      <p class="by" id="by"></p>
+      <button class="by" id="by" type="button"></button>
     </main>
 
     <script type="module" src="/src/splash/splash.ts"></script>

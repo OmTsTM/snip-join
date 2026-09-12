@@ -41,7 +41,18 @@ export interface MediaSourceInfo {
   readonly fileName: string
   readonly sizeBytes: number
   readonly container: string
+  /** How long a block of this medium is when it first lands on the timeline. */
   readonly duration: number
+  /**
+   * The longest a block of this medium may be trimmed to.
+   *
+   * The same as `duration` for moving pictures. A still has no length of its
+   * own, so this is how far its one frame may be stretched — and the length its
+   * preview copy was built at, so scrubbing cannot run past the picture.
+   */
+  readonly maxDuration: number
+  /** `still` is a single frame: an image, or a one-frame video file. */
+  readonly kind: 'motion' | 'still'
   readonly video: VideoStreamInfo | null
   readonly audio: AudioStreamInfo | null
   readonly playability: 'native' | 'needsProxy'

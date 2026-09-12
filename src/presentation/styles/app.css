@@ -259,6 +259,47 @@
   }
 
   /*
+   * The timeline's own horizontal scrollbar.
+   *
+   * Larger than the application's default and always drawn, because on a long
+   * recording this is the main way through the footage and the four-pixel thumb
+   * the shared rule produced was a control nobody could find, let alone grab.
+   *
+   * Its height is spent out of the margin under the block track, which
+   * `dockSize.ts` reserves: the scrolling element's own box is the canvas, so a
+   * bar taller than that margin eats into the strip above it.
+   */
+  .timeline-scroll::-webkit-scrollbar {
+    height: 12px;
+  }
+
+  .timeline-scroll::-webkit-scrollbar-track {
+    background: var(--color-ink);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .timeline-scroll::-webkit-scrollbar-thumb {
+    background: var(--color-line-bright);
+    border-radius: 999px;
+    /* Two pixels rather than the shared rule's three: the bar is here to be
+       grabbed, and the border is padding that the thumb does not get to use. */
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  .timeline-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--color-dusk-lift);
+    background-clip: content-box;
+  }
+
+  .timeline-scroll::-webkit-scrollbar-thumb:active {
+    background: var(--color-dusk-bright);
+    background-clip: content-box;
+  }
+
+  /*
    * A hole in the timeline. Hatching reads as absence in a way an empty area
    * never can, and it uses dusk rather than orange because a hole is a result,
    * not a pending cut.

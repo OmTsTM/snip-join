@@ -48,6 +48,7 @@ export const zh: Catalogue = {
   'selection.lift': '取出以便移动',
   'selection.liftHint': '把选区变成独立的片段，方便你拖到别处。',
   'selection.selectAll': '全选',
+  'selection.onlyHole': '选区落在空洞上，那里没有可以剪掉的内容。',
 
   'join.label': '接上两端',
   'join.on': '剩下的部分会接成一段连续的视频。',
@@ -55,15 +56,27 @@ export const zh: Catalogue = {
 
   'media.title': '素材',
   'media.add': '添加视频',
-  'media.append': '再次放到时间线上',
   'media.remove': '从项目中移除',
   'media.first': '决定其他素材统一到的格式',
+  'media.still': '一张静止图片，时长由你决定。',
+  'media.stillTag': '静图',
+  'media.hint': '单击文件把它加到末尾；拖到时间线上可以放在任意位置。',
+  'media.appendTitle': '加到时间线上？',
+  'media.appendBody': '{name} 会作为新片段加在末尾，之后可以随意移动。',
+  'media.appendConfirm': '加上',
+  'media.appendCancel': '暂不',
 
   'blocks.title': '片段',
   'blocks.one': '1 个片段',
   'blocks.many': '{count} 个片段',
   'blocks.number': '片段 {number}',
   'blocks.delete': '删除该片段',
+  'blocks.copy': '复制',
+  'blocks.cut': '剪切',
+  'blocks.paste': '粘贴到播放头',
+  'blocks.duplicate': '创建副本',
+  'blocks.moveEarlier': '前移一位',
+  'blocks.moveLater': '后移一位',
   'blocks.split': '在播放头处切分',
   'blocks.drag': '拖动以移动',
   'blocks.trimStart': '调整起点',
@@ -78,6 +91,8 @@ export const zh: Catalogue = {
   'timeline.zoomOut': '缩小',
   'timeline.fit': '适应窗口',
   'timeline.kept': '保留 {kept}，共 {total}',
+  'timeline.length': '成片 {length}',
+  'timeline.empty': '时间线是空的。从“素材”里拖一个文件过来，或者撤销。',
   'timeline.removed': '已移除 {removed}',
   'timeline.loadingFrames': '正在读取画面…',
 
@@ -85,6 +100,7 @@ export const zh: Catalogue = {
   'history.redo': '重做',
 
   'export.open': '导出',
+  'export.nothing': '时间线上没有可导出的内容。',
   'export.title': '导出',
   'export.subtitle': '选择为结果投入多少处理时间。',
   'export.mode': '方式',
@@ -100,6 +116,7 @@ export const zh: Catalogue = {
   'export.mode.enhanced.detail': '在精确的基础上加上放大与修复。这是最慢的一种：预计耗时为视频时长的数倍。',
   'export.mode.forced': '空缺无法复制，因此这次导出会重新编码。',
   'export.mode.forcedByFiles': '多个文件无法复制，因此这次导出会重新编码。',
+  'export.mode.forcedByStill': '图片要在显示的整段时间里逐帧画出，因此这次导出会重新编码。',
 
   'export.lossless.exact': '切点精确，不做任何重新编码。',
   'export.lossless.shift': '切点会向前移动最多 {shift}，以对齐最近的可切位置。',
@@ -182,6 +199,11 @@ export const zh: Catalogue = {
   'shortcuts.zoom': '缩放时间线',
   'shortcuts.export': '导出',
   'shortcuts.show': '键盘快捷键',
+  'shortcuts.deleteBlock': '删除选中的片段',
+  'shortcuts.copy': '复制片段',
+  'shortcuts.cut': '剪切片段',
+  'shortcuts.paste': '粘贴到播放头',
+  'shortcuts.reorder': '在顺序中移动片段',
 
   'language.label': '语言',
 

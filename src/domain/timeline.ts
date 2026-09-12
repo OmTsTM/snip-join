@@ -328,6 +328,137 @@ export function isolateSpan(timeline: Timeline, range: Span): { timeline: Timeli
   return { timeline: settled, isolated: isolated?.id ?? null }
 }
 
+/**
+ * The part of a range that actually sits on surviving material.
+ *
+ * Rails can be dragged across a hole, and a hole holds nothing: removing one is
+ * removing an absence. Narrowing the range to the material underneath it is what
+ * lets a removal report — and act on — what it will really take out, and what
+ * lets the interface refuse the gesture when the answer is nothing at all.
+ */
+export function coveredSpan(timeline: Timeline, range: Span): Span | null {
+  if (isEmpty(range)) return null
+
+  let start = Number.POSITIVE_INFINITY
+  let end = Number.NEGATIVE_INFINITY
+
+  for (const block of timeline.blocks) {
+    const cut = intersect(blockSpan(block), range)
+    if (!cut) continue
+    start = Math.min(start, cut.start)
+    end = Math.max(end, cut.end)
+  }
+
+  return end - start > EPSILON ? span(start, end) : null
+}
+
+/** The piece a clipboard holds: which file, and which stretch of it. */
+export interface Clip {
+  readonly mediaId: string
+  readonly source: Span
+}
+
+/**
+ * Puts a piece on the timeline at a position, without disturbing the rest.
+ *
+ * The two modes disagree about what "at a position" means, in the same way they
+ * disagree about a drag. With holes closed the position picks a place in the
+ * running order, so the block underneath is split first and the piece lands in
+ * the seam that leaves — which is what makes a paste land at the playhead rather
+ * than at the nearest block boundary. With holes allowed the position is
+ * literal, so the piece goes to the nearest stretch of timeline that is free.
+ */
+export function insertClip(
+  timeline: Timeline,
+  clip: Clip,
+  at: number,
+): { timeline: Timeline; inserted: BlockId | null } {
+  if (isEmpty(clip.source)) return { timeline, inserted: null }
+
+  const id = nextBlockId()
+  const wanted = Math.max(0, at)
+
+  if (timeline.mode === 'join') {
+    const seamed = splitAt(timeline, wanted)
+    const blocks = [...seamed.blocks]
+    const index = blocks.findIndex((block) => block.start >= wanted - EPSILON)
+    blocks.splice(index === -1 ? blocks.length : index, 0, {
+      id,
+      mediaId: clip.mediaId,
+      source: clip.source,
+      start: wanted,
+    })
+    return { timeline: settle(seamed, blocks), inserted: id }
+  }
+
+  // Parked past everything first, then moved: `moveBlock` already knows how to
+  // find the nearest free stretch, and doing it here a second time is how the
+  // two would drift apart.
+  const parked: Block = {
+    id,
+    mediaId: clip.mediaId,
+    source: clip.source,
+    start: totalDuration(timeline),
+  }
+  const parkedTimeline = settle(timeline, [...timeline.blocks, parked])
+  return { timeline: moveBlock(parkedTimeline, id, wanted), inserted: id }
+}
+
+/** Puts a second copy of a block directly after it. */
+export function duplicateBlock(
+  timeline: Timeline,
+  id: BlockId,
+): { timeline: Timeline; inserted: BlockId | null } {
+  const block = findBlock(timeline, id)
+  if (!block) return { timeline, inserted: null }
+  return insertClip(timeline, { mediaId: block.mediaId, source: block.source }, blockEnd(block))
+}
+
+/**
+ * Swaps a block with the one beside it.
+ *
+ * The keyboard counterpart to dragging, and the reason reordering does not
+ * depend on hitting a twenty-pixel handle. With holes closed this is a move in
+ * the running order and nothing else. With holes allowed the position is the
+ * user's, so the pair trades places inside the stretch the two of them already
+ * occupied: the outer bounds and the hole between them are both preserved,
+ * which is what keeps the swap from disturbing anything further along.
+ */
+export function shiftBlock(timeline: Timeline, id: BlockId, direction: 1 | -1): Timeline {
+  const ordered = sorted(timeline.blocks)
+  const index = ordered.findIndex((block) => block.id === id)
+  if (index === -1) return timeline
+
+  const partnerIndex = index + direction
+  const moving = ordered[index]
+  const partner = ordered[partnerIndex]
+  if (!moving || !partner) return timeline
+
+  if (timeline.mode === 'join') {
+    const blocks = [...timeline.blocks]
+    const from = blocks.findIndex((block) => block.id === id)
+    const to = from + direction
+    if (to < 0 || to >= blocks.length) return timeline
+    const [lifted] = blocks.splice(from, 1)
+    blocks.splice(to, 0, lifted!)
+    return settle(timeline, blocks)
+  }
+
+  const [earlier, later] = direction === 1 ? [moving, partner] : [partner, moving]
+  const between = later.start - blockEnd(earlier)
+  const laterStart = earlier.start
+  const earlierStart = laterStart + duration(later.source) + between
+
+  return settle(
+    timeline,
+    timeline.blocks.map((block) => {
+      if (block.id === earlier.id) return { ...block, start: earlierStart }
+      if (block.id === later.id) return { ...block, start: laterStart }
+      return block
+    }),
+  )
+}
+
 export function removeBlock(timeline: Timeline, id: BlockId): Timeline {
   return settle(
     timeline,
@@ -415,10 +546,40 @@ export function moveBlock(timeline: Timeline, id: BlockId, desiredStart: number)
 }
 
 /**
+ * How far each edge of a block may be dragged before it reaches a neighbour.
+ *
+ * Only a real limit with holes allowed. There a block keeps the position the
+ * user gave it and nothing reflows out of the way, so an edge dragged past the
+ * block beside it lands *on top* of it — two pieces claiming the same instant,
+ * which is not a timeline any export can describe, and which the interface drew
+ * as one block sitting over another. With the ends joined there is nothing to
+ * collide with: the reflow moves everything along.
+ */
+function trimBounds(timeline: Timeline, block: Block): Span {
+  if (timeline.mode === 'join') {
+    return span(0, Number.POSITIVE_INFINITY)
+  }
+
+  let lower = 0
+  let upper = Number.POSITIVE_INFINITY
+
+  for (const other of timeline.blocks) {
+    if (other.id === block.id) continue
+    // Judged against the edge that is not moving, so a neighbour that already
+    // overlaps cannot make its own side unreachable.
+    if (blockEnd(other) <= block.start + EPSILON) lower = Math.max(lower, blockEnd(other))
+    if (other.start >= blockEnd(block) - EPSILON) upper = Math.min(upper, other.start)
+  }
+
+  return span(lower, upper)
+}
+
+/**
  * Trims one edge of a block without moving the other.
  *
  * Trimming reveals or hides source material, so the source range changes rather
- * than the block sliding along the timeline.
+ * than the block sliding along the timeline. The edge stops where the next
+ * block begins: see `trimBounds`.
  */
 export function trimBlock(
   timeline: Timeline,
@@ -431,9 +592,11 @@ export function trimBlock(
   if (!block) return timeline
 
   const minimum = 1 / 60
+  const bounds = trimBounds(timeline, block)
+  const wanted = clamp(at, bounds.start, bounds.end)
 
   if (edge === 'start') {
-    const offset = at - block.start
+    const offset = wanted - block.start
     const nextSourceStart = clamp(
       block.source.start + offset,
       0,
@@ -455,7 +618,7 @@ export function trimBlock(
   }
 
   const nextSourceEnd = clamp(
-    block.source.start + (at - block.start),
+    block.source.start + (wanted - block.start),
     block.source.start + minimum,
     sourceDuration,
   )

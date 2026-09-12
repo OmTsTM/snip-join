@@ -51,6 +51,7 @@ export const es: Catalogue = {
   'selection.liftHint':
     'Convierte la selección en un bloque propio para que puedas arrastrarlo a otro sitio.',
   'selection.selectAll': 'Seleccionar todo',
+  'selection.onlyHole': 'Los raíles están sobre un hueco. Ahí no hay nada que quitar.',
 
   'join.label': 'Unir los extremos',
   'join.on': 'Lo que queda se une en un vídeo continuo.',
@@ -58,15 +59,27 @@ export const es: Catalogue = {
 
   'media.title': 'Medios',
   'media.add': 'Añadir un vídeo',
-  'media.append': 'Ponerlo otra vez en la línea de tiempo',
   'media.remove': 'Quitar del proyecto',
   'media.first': 'Define el formato al que se ajusta todo lo demás',
+  'media.still': 'Una imagen fija. Dura lo que tú decidas.',
+  'media.stillTag': 'Imagen',
+  'media.hint': 'Haz clic en un archivo para ponerlo al final. Arrástralo a la línea de tiempo para colocarlo.',
+  'media.appendTitle': '¿Ponerlo en la línea de tiempo?',
+  'media.appendBody': '{name} entra como un bloque nuevo al final. Desde ahí puedes moverlo.',
+  'media.appendConfirm': 'Ponerlo',
+  'media.appendCancel': 'Ahora no',
 
   'blocks.title': 'Bloques',
   'blocks.one': '1 bloque',
   'blocks.many': '{count} bloques',
   'blocks.number': 'Bloque {number}',
   'blocks.delete': 'Eliminar este bloque',
+  'blocks.copy': 'Copiar',
+  'blocks.cut': 'Cortar',
+  'blocks.paste': 'Pegar en el cursor',
+  'blocks.duplicate': 'Duplicar',
+  'blocks.moveEarlier': 'Mover antes',
+  'blocks.moveLater': 'Mover después',
   'blocks.split': 'Dividir en el cursor',
   'blocks.drag': 'Arrastra para mover',
   'blocks.trimStart': 'Ajustar el inicio',
@@ -81,6 +94,8 @@ export const es: Catalogue = {
   'timeline.zoomOut': 'Alejar',
   'timeline.fit': 'Ajustar a la ventana',
   'timeline.kept': '{kept} de {total} conservados',
+  'timeline.length': 'Resultado {length}',
+  'timeline.empty': 'No hay nada en la línea de tiempo. Arrastra un archivo desde Medios, o deshaz.',
   'timeline.removed': '{removed} quitados',
   'timeline.loadingFrames': 'Leyendo los fotogramas…',
 
@@ -88,6 +103,7 @@ export const es: Catalogue = {
   'history.redo': 'Rehacer',
 
   'export.open': 'Exportar',
+  'export.nothing': 'No hay nada en la línea de tiempo que exportar.',
   'export.title': 'Exportar',
   'export.subtitle': 'Elige cuánto trabajo dedicar al resultado.',
   'export.mode': 'Método',
@@ -105,6 +121,7 @@ export const es: Catalogue = {
     'Preciso, más ampliación y restauración. Este es el lento: cuenta con varias veces la duración del vídeo.',
   'export.mode.forced': 'Un hueco no se puede copiar, así que esta exportación recodifica.',
   'export.mode.forcedByFiles': 'Más de un archivo no se puede copiar, así que esta exportación recodifica.',
+  'export.mode.forcedByStill': 'Una imagen hay que dibujarla durante todo el tiempo que se ve, así que esta exportación recodifica.',
 
   'export.lossless.exact': 'Cortes exactos. No se recodifica nada.',
   'export.lossless.shift': 'Los cortes retroceden hasta {shift} para llegar al punto de corte más cercano.',
@@ -187,6 +204,11 @@ export const es: Catalogue = {
   'shortcuts.zoom': 'Acercar la línea de tiempo',
   'shortcuts.export': 'Exportar',
   'shortcuts.show': 'Atajos de teclado',
+  'shortcuts.deleteBlock': 'Eliminar el bloque elegido',
+  'shortcuts.copy': 'Copiar el bloque',
+  'shortcuts.cut': 'Cortar el bloque',
+  'shortcuts.paste': 'Pegar en el cursor',
+  'shortcuts.reorder': 'Mover el bloque en el orden',
 
   'language.label': 'Idioma',
 

@@ -14,12 +14,18 @@ import { selectTimeline, useEditor } from '@presentation/state/editorStore'
  * which part of the original each one came from. That second fact is invisible
  * on the timeline once blocks have been reordered, and it is what tells the user
  * which piece is which.
+ *
+ * Two states are drawn here and they are not the same thing: a row is *playing*
+ * when the playhead is inside it, and *chosen* when it is the block the
+ * keyboard, the clipboard and the block menu act on. Clicking a row does both.
  */
 export function BlockList() {
   const t = useT()
   const timeline = useEditor(selectTimeline)
   const seek = useEditor((state) => state.seek)
   const deleteBlock = useEditor((state) => state.deleteBlock)
+  const selectBlock = useEditor((state) => state.selectBlock)
+  const selectedBlock = useEditor((state) => state.selectedBlock)
   const playhead = useEditor((state) => state.playhead)
 
   const count = timeline.blocks.length
@@ -37,6 +43,7 @@ export function BlockList() {
         <AnimatePresence initial={false}>
           {timeline.blocks.map((block, index) => {
             const active = playhead >= block.start && playhead < blockEnd(block)
+            const chosen = selectedBlock === block.id
 
             return (
               <motion.li
@@ -49,13 +56,20 @@ export function BlockList() {
               >
                 <div
                   className={cx(
-                    'group flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors duration-150',
+                    'group flex items-center gap-2.5 rounded-lg px-2 py-2',
+                    'transition-[background-color,box-shadow] duration-150',
                     active ? 'bg-raised' : 'hover:bg-raised/60',
+                    // Paper, matching the ring the chosen block wears on the
+                    // timeline: the two are one selection shown in two places.
+                    chosen && 'shadow-[inset_0_0_0_1.5px_var(--color-paper)]',
                   )}
                 >
                   <button
                     type="button"
-                    onClick={() => seek(block.start)}
+                    onClick={() => {
+                      seek(block.start)
+                      selectBlock(block.id)
+                    }}
                     className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                     title={t('blocks.number', { number: index + 1 })}
                   >

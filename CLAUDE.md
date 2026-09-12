@@ -69,6 +69,26 @@ depends on the mode, and getting it backwards silently undoes reorders:
 
 Both funnel through `settle()` in `src/domain/timeline.ts`. Add operations there.
 
+**Two selections, and they are not the same.** `selection` is a stretch of
+*time* marked by the orange rails — what a removal takes out. `selectedBlock` is
+a *piece*, the one the block menu, the clipboard and `Delete` act on, drawn with
+a pale ring because it removes nothing. `Delete` prefers the rails and falls back
+to the block, which is the only way the keyboard can reach a block at all.
+
+A click on the track drops the rails **only when it lands outside them**.
+Clearing them unconditionally made "mark the start, move the playhead, mark the
+end" impossible: moving the playhead is what you do between the two, and it threw
+away the mark you had just set.
+
+**A still is a third kind of thing.** `MediaKind::Still` — an image, or any
+single-frame file. It has no length of its own, so the editor gives it one
+(`STILL_DEFAULT_SECONDS`) and it stretches to `STILL_MAX_SECONDS`, which is also
+the length its preview copy is built at so scrubbing cannot run past the picture.
+
+**An empty timeline is legal.** Deleting the last block is how you start over
+without closing the file; the media pool still holds everything. What it is not
+is exportable, which `selectCanExport` gates.
+
 ## Colour rule
 
 The palette is sampled from `logo.png`, not invented: `#F9811E` is the scissors,
@@ -101,6 +121,12 @@ three things, all of which exist:
   export dialog says so. The first block's start and the last block's end are
   exempt: they are the untouched ends of the video and need no keyframe.
 
+Cut points are positions **inside a file**, so the store keeps them per medium
+and `snapToCutPoint` carries an instant into the block's own source coordinates
+before snapping and back afterwards. Snapping in timeline coordinates against one
+shared list is the defect that made every added file unselectable: past the first
+file's length, every cut was dragged back into it.
+
 All-intra footage (ProRes, DNxHD, MJPEG) makes every frame a cut point. The list
 is capped at 20 000 and the `truncated` flag says "cut anywhere" instead of
 plotting a grey wash.
@@ -120,6 +146,10 @@ the layout and the limits are derived from it. The rules:
   canvas by exactly its height at every size *and* put the floor 22px below the
   designed layout. `dockSize.test.ts` walks all allowed heights and asserts the
   margin underneath, so that cannot come back.
+- The horizontal scrollbar is drawn **inside** that bottom margin, not below it:
+  the scrolling element's own box is the canvas. `SCROLLBAR_HEIGHT` therefore has
+  to stay under `TRACK_BOTTOM`, which the same test asserts, and `.timeline-scroll`
+  in `app.css` has to agree with it.
 
 The height is remembered in `localStorage` and re-clamped on every window resize,
 since shrinking the window can leave a stored height the stage can no longer
@@ -203,11 +233,83 @@ media falls back to the ordinary locations rather than failing every write.
   release, which was the last free moment; it does not move again.
 - **Never write the export over the source.** `paths::validate_output` refuses
   it; FFmpeg would truncate the file it is reading.
+- **A still needs `-loop 1` *and* `-t`.** One packet, so the graph's `trim` runs
+  out after a single frame and a five second title card exports as a blink.
+  `-t` is what ends the loop: an infinite input keeps the graph running after
+  every other segment has finished. The bound is the furthest into the still any
+  clip reaches plus a frame, because `trim` reads the timestamp before its end.
+  A still also cannot be stream copied, which `export_plan` folds into the same
+  reconciliation as a hole.
+- **A container lies about a still's length.** A PNG reports a fortieth of a
+  second, which is why one used to land on the timeline two pixels wide. `probe`
+  replaces it rather than layering on top of it, and detects a still two ways:
+  the container name (`png_pipe` and friends) or a one-frame video track. Sound
+  rules it out outright — an animated GIF has to stay moving pictures.
+- **A portal is still a React child of whatever rendered it.** The block menu
+  is portalled into `document.body` so the scrolling canvas cannot clip it, but
+  its events still bubble through the React tree back into the timeline — which
+  answers a press by capturing the pointer for a selection drag. The capture
+  retargets the `pointerup`, no `click` is ever delivered, and every entry in
+  the menu silently does nothing. `ContextMenu` stops propagation on its own
+  pointer events; the capture-phase listener that dismisses it checks
+  containment instead.
+- **The canvas keeps empty room past the last block.** `TIMELINE_TRAIL`. Without
+  it the canvas stops exactly where the footage does, so a block at the far
+  right cannot be made any longer: the pointer runs out of window and there is
+  nothing further along to scroll to either. `fitScale` subtracts it, so fitting
+  still leaves no scrollbar.
+- **Every gesture that can reach the edge of the view has to say so.**
+  `dragScroll.ts` is what the dock watches to start following the pointer, and
+  each gesture reads the canvas rect on every move rather than caching it — the
+  view moving under a stationary pointer fires no `pointermove`, so each one
+  also replays itself on `scroll`. Miss either half and the gesture freezes, or
+  runs backwards, the moment the view starts to travel.
+- **Snapping to cut points is bounded by a distance.** `SNAP_PIXELS` in the
+  store. Some files carry almost none — an animated GIF has exactly one, at the
+  start — and pulling onto "the nearest one, wherever it is" dragged every edit
+  onto that instant: a trimmed edge collapsed the moment it was touched, and a
+  selection could only ever cover the whole block. Measured in pixels so it
+  behaves the same at every zoom. Footage whose list came back `truncated` is
+  never snapped at all: it can be cut anywhere, and the list is only its first
+  twenty thousand points.
+- **A block's drawn width must not have a usable floor.** A floor wide enough to
+  grab is a floor that lies about where the block ends, and several short blocks
+  side by side each get drawn over the next — indistinguishable from an overlap.
+  `MIN_BLOCK_WIDTH` is a hairline for that reason. It was once 26px because a
+  still reported a fortieth of a second; a still has a real length now.
+- **A dragged block is never drawn under the pointer.** It is tempting, and it
+  is wrong: with the ends joined, position has no meaning — only the running
+  order does — so a card carried between slots is drawn across whatever it
+  passes, which reads as two blocks overlapping and is the one thing the
+  timeline promises cannot happen. The card stays in the slot `moveBlock` gave
+  it with the `left` transition switched on, so it *glides* into each new place
+  as the drag crosses a midpoint and the displaced block glides the other way.
+  With holes allowed the position is literal and already tracks the pointer, so
+  there the transition comes off instead: a continuous position must not lag
+  behind the hand moving it.
+- **Nothing else enforces "never overlapping" in `gap` mode.** `settle` only
+  sorts there — the reflow that makes overlap impossible with the ends joined
+  does not run. Every operation therefore has to keep the invariant itself:
+  `moveBlock` places into a free interval, `insertClip` goes through it, and
+  `trimBlock` stops each edge at the neighbour (`trimBounds`). Trimming was the
+  one that did not, and it drew one block sitting on top of another.
+- **Reordering across a long block needs the view to follow.** The drop lands
+  after every block whose midpoint the dragged one has passed, and a five minute
+  block's midpoint is off screen at any zoom that still shows frames — so without
+  edge scrolling the only way to swap a short block past a long one is to zoom
+  out first. `TimelineDock` scrolls; `BlockCard` replays its placement on the
+  resulting `scroll` event, because the canvas moving under a stationary pointer
+  fires no `pointermove` of its own.
 
 ## Security posture
 
 - The renderer has **no** filesystem, shell or HTTP capability. See
   `src-tauri/capabilities/default.json`.
+- The splash window has a capability file of its own, granting it exactly one
+  command: opening the credit line's address, scoped to that single URL. It is
+  separate rather than a second entry in the editor's `windows` list, because
+  sharing that list would hand the splash dialogs, window chrome and the asset
+  protocol as well.
 - The asset protocol scope starts empty. Opening a file grants access to exactly
   that one path, so nothing else on disk is reachable by the web view.
 - FFmpeg is spawned with an argument vector, never a shell string. A file name
@@ -225,7 +327,7 @@ pnpm app:dev -- -- path/to/video.mp4   # open a file at launch
 pnpm typecheck          # tsc, strict
 pnpm test               # renderer unit tests
 pnpm i18n:check         # placeholder parity across locales, and dead keys
-cd src-tauri && cargo test              # 119 unit + 8 end-to-end
+cd src-tauri && cargo test              # 132 unit + 13 end-to-end
 cd src-tauri && cargo clippy --all-targets
 cd src-tauri && cargo fmt --all         # rustfmt.toml sits at the repo root
 pnpm ffmpeg:fetch       # download the FFmpeg that gets bundled
@@ -252,11 +354,12 @@ window, the taskbar and the README cannot drift apart:
 pnpm icons        # logo.png -> src-tauri/icon-source.png + the title bar mark
 pnpm tauri icon src-tauri/icon-source.png    # -> src-tauri/icons/
 pnpm banner       # -> docs/banner.png
+pnpm support      # -> docs/support.png, the card over the README's Ko-fi section
 ```
 
-Both generators need `pip install pillow fonttools brotli`; the banner reads the
-brand woff2 files out of `node_modules` and converts them in memory, because
-Pillow cannot open woff2.
+All three generators need `pip install pillow fonttools brotli`; the banner and
+the support card read the brand woff2 files out of `node_modules` and convert
+them in memory, because Pillow cannot open woff2.
 
 `make-icon-source.py` cuts the tile out of the logo and makes everything outside
 it transparent. That matters: the logo is artwork on a matte with a drop shadow,

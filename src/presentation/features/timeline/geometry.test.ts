@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  canvasWidth,
   fitScale,
   pixelsToTime,
   tickInterval,
   timeToPixels,
   TIMELINE_PADDING,
+  TIMELINE_TRAIL,
   visibleTicks,
   zoomAround,
 } from './geometry'
@@ -84,9 +86,33 @@ describe('converting between time and pixels', () => {
 })
 
 describe('fitting and zooming', () => {
-  it('fits the whole video inside the viewport', () => {
+  /**
+   * Fitting means the canvas is exactly the viewport: the video, the padding at
+   * each end, and the trailing room a drag needs to reach into. Anything wider
+   * would put a scrollbar under a timeline that is entirely on screen; anything
+   * narrower would waste width the footage could have had.
+   */
+  it('fits the whole video, its padding and its trailing room, inside the viewport', () => {
     const scale = fitScale(120, 1000)
-    expect(timeToPixels(120, scale)).toBeCloseTo(1000 - TIMELINE_PADDING, 6)
+
+    expect(canvasWidth(120, scale)).toBeCloseTo(1000, 6)
+    expect(timeToPixels(120, scale)).toBeCloseTo(1000 - TIMELINE_PADDING - TIMELINE_TRAIL, 6)
+  })
+
+  /**
+   * There has to be somewhere past the last block to drag into. Without it an
+   * edge at the far right cannot be extended at all: the pointer runs out of
+   * window and the scrollable width ends at the same instant the edge does.
+   */
+  it('keeps room past the end of the footage at every scale', () => {
+    for (const scale of [0.5, 8, 40, 200]) {
+      // The trailing room plus the padding on that side, which is empty canvas
+      // just the same.
+      expect(canvasWidth(120, scale) - timeToPixels(120, scale)).toBe(
+        TIMELINE_PADDING + TIMELINE_TRAIL,
+      )
+    }
+    expect(canvasWidth(0, 40)).toBe(TIMELINE_PADDING * 2 + TIMELINE_TRAIL)
   })
 
   it('falls back to a usable scale for an empty timeline', () => {

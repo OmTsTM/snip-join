@@ -11,6 +11,10 @@ if (!container) throw new Error('the root element is missing from index.html')
 // The window is chromeless, so the browser context menu would be the only piece
 // of non-application interface on screen. Developer tools remain reachable from
 // the debug build's own shortcut.
+//
+// On `window`, in the bubble phase, so it runs after React's own handlers: the
+// block menu opens from a `contextmenu` of its own, and a listener that ran
+// first would have to decide which elements are allowed to have one.
 window.addEventListener('contextmenu', (event) => event.preventDefault())
 
 createRoot(container).render(

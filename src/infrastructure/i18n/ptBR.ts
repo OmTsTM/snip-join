@@ -51,6 +51,7 @@ export const ptBR: Catalogue = {
   'selection.liftHint':
     'Transforma a seleção em um bloco próprio para você arrastar para outro lugar.',
   'selection.selectAll': 'Selecionar tudo',
+  'selection.onlyHole': 'Os trilhos estão sobre um buraco. Ali não há nada para tirar.',
 
   'join.label': 'Juntar as partes',
   'join.on': 'O que sobra se une em um vídeo contínuo.',
@@ -58,15 +59,27 @@ export const ptBR: Catalogue = {
 
   'media.title': 'Mídias',
   'media.add': 'Adicionar um vídeo',
-  'media.append': 'Colocar de novo na linha do tempo',
   'media.remove': 'Remover do projeto',
   'media.first': 'Define o formato ao qual todo o resto é ajustado',
+  'media.still': 'Uma imagem parada. Dura o quanto você quiser.',
+  'media.stillTag': 'Imagem',
+  'media.hint': 'Clique num arquivo para colocá-lo no fim. Arraste-o até a linha do tempo para posicioná-lo.',
+  'media.appendTitle': 'Colocar na linha do tempo?',
+  'media.appendBody': '{name} entra como um bloco novo no fim. De lá você pode movê-lo.',
+  'media.appendConfirm': 'Colocar',
+  'media.appendCancel': 'Agora não',
 
   'blocks.title': 'Blocos',
   'blocks.one': '1 bloco',
   'blocks.many': '{count} blocos',
   'blocks.number': 'Bloco {number}',
   'blocks.delete': 'Excluir este bloco',
+  'blocks.copy': 'Copiar',
+  'blocks.cut': 'Recortar',
+  'blocks.paste': 'Colar no cursor',
+  'blocks.duplicate': 'Duplicar',
+  'blocks.moveEarlier': 'Mover para antes',
+  'blocks.moveLater': 'Mover para depois',
   'blocks.split': 'Dividir no cursor',
   'blocks.drag': 'Arraste para mover',
   'blocks.trimStart': 'Ajustar o início',
@@ -81,6 +94,8 @@ export const ptBR: Catalogue = {
   'timeline.zoomOut': 'Afastar',
   'timeline.fit': 'Ajustar à janela',
   'timeline.kept': '{kept} de {total} mantidos',
+  'timeline.length': 'Resultado {length}',
+  'timeline.empty': 'Nada na linha do tempo. Arraste um arquivo de Mídias até aqui, ou desfaça.',
   'timeline.removed': '{removed} removidos',
   'timeline.loadingFrames': 'Lendo os quadros…',
 
@@ -88,6 +103,7 @@ export const ptBR: Catalogue = {
   'history.redo': 'Refazer',
 
   'export.open': 'Exportar',
+  'export.nothing': 'Não há nada na linha do tempo para exportar.',
   'export.title': 'Exportar',
   'export.subtitle': 'Escolha quanto trabalho gastar no resultado.',
   'export.mode': 'Método',
@@ -105,6 +121,7 @@ export const ptBR: Catalogue = {
     'Preciso, mais ampliação e restauração. Este é o lento: espere várias vezes a duração do vídeo.',
   'export.mode.forced': 'Um buraco não pode ser copiado, então esta exportação recodifica.',
   'export.mode.forcedByFiles': 'Mais de um arquivo não pode ser copiado, então esta exportação recodifica.',
+  'export.mode.forcedByStill': 'Uma imagem precisa ser desenhada por todo o tempo em que aparece, então esta exportação recodifica.',
 
   'export.lossless.exact': 'Cortes exatos. Nada é recodificado.',
   'export.lossless.shift': 'Os cortes recuam até {shift} para alcançar o ponto de corte mais próximo.',
@@ -188,6 +205,11 @@ export const ptBR: Catalogue = {
   'shortcuts.zoom': 'Aproximar a linha do tempo',
   'shortcuts.export': 'Exportar',
   'shortcuts.show': 'Atalhos de teclado',
+  'shortcuts.deleteBlock': 'Excluir o bloco escolhido',
+  'shortcuts.copy': 'Copiar o bloco',
+  'shortcuts.cut': 'Recortar o bloco',
+  'shortcuts.paste': 'Colar no cursor',
+  'shortcuts.reorder': 'Mover o bloco na ordem',
 
   'language.label': 'Idioma',
 

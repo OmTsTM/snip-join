@@ -17,8 +17,16 @@ const SHORTCUTS: ReadonlyArray<{ keys: readonly string[]; label: MessageKey }> =
   { keys: ['←', '→'], label: 'shortcuts.frameStep' },
   { keys: ['I'], label: 'shortcuts.setIn' },
   { keys: ['O'], label: 'shortcuts.setOut' },
+  // Delete appears twice on purpose: it means two different things depending on
+  // whether a stretch is marked, and a reference that hid the second one would
+  // leave the block selection with no keyboard at all.
   { keys: ['Delete'], label: 'shortcuts.remove' },
+  { keys: ['Delete'], label: 'shortcuts.deleteBlock' },
   { keys: ['S'], label: 'shortcuts.split' },
+  { keys: ['Ctrl', 'C'], label: 'shortcuts.copy' },
+  { keys: ['Ctrl', 'X'], label: 'shortcuts.cut' },
+  { keys: ['Ctrl', 'V'], label: 'shortcuts.paste' },
+  { keys: ['Alt', '←', '→'], label: 'shortcuts.reorder' },
   { keys: ['Ctrl', 'Z'], label: 'shortcuts.undo' },
   { keys: ['Ctrl', 'Y'], label: 'shortcuts.redo' },
   { keys: ['Ctrl', 'A'], label: 'selection.selectAll' },
@@ -73,7 +81,7 @@ export function ShortcutsDialog({
               </IconButton>
             </header>
 
-            <dl className="divide-y divide-line/60 px-5 py-2">
+            <dl className="max-h-[52vh] divide-y divide-line/60 overflow-y-auto px-5 py-2">
               {SHORTCUTS.map((shortcut) => (
                 <div key={shortcut.label} className="flex items-center justify-between gap-4 py-2.5">
                   <dt className="text-[12.5px] text-muted">{t(shortcut.label)}</dt>

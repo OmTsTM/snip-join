@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { span } from './time'
+import { overlaps, span } from './time'
 import {
   appendMedium,
   blockAt,
   blockEnd,
+  blockSpan,
+  coveredSpan,
   createTimeline,
+  duplicateBlock,
   gaps,
   isContiguous,
+  insertClip,
   isolateSpan,
   keptDuration,
   mediaAt,
@@ -16,6 +20,7 @@ import {
   removeBlock,
   removeSpan,
   setMode,
+  shiftBlock,
   sourceAt,
   spansMultipleMedia,
   splitAt,
@@ -331,5 +336,182 @@ describe('several media on one timeline', () => {
 
     expect(mediaAt(withHole, 10)).toBe(MEDIA)
     expect(mediaAt(withHole, 25)).toBe(MEDIA)
+  })
+})
+
+describe('what a selection actually covers', () => {
+  /** Two ten-second pieces with a ten-second hole between them. */
+  const holed = () => removeSpan(createTimeline(MEDIA, 30, 'gap'), span(10, 20))
+
+  it('narrows a range to the material under it', () => {
+    expect(coveredSpan(holed(), span(5, 25))).toEqual(span(5, 25))
+    expect(coveredSpan(holed(), span(5, 15))).toEqual(span(5, 10))
+    expect(coveredSpan(holed(), span(15, 25))).toEqual(span(20, 25))
+  })
+
+  /**
+   * The rails can be dragged across a hole, and a hole holds nothing. Removing
+   * one is removing an absence, which is what this answer lets the interface
+   * refuse rather than record an edit that changes nothing.
+   */
+  it('reports nothing for a range entirely inside a hole', () => {
+    expect(coveredSpan(holed(), span(12, 18))).toBeNull()
+  })
+
+  it('reports nothing for a range past the end', () => {
+    expect(coveredSpan(fresh(), span(80, 90))).toBeNull()
+  })
+})
+
+describe('putting a piece back on the timeline', () => {
+  it('lands at the playhead, splitting what was there, with the ends joined', () => {
+    const { timeline, inserted } = insertClip(
+      fresh('join'),
+      { mediaId: 'b.mp4', source: span(0, 5) },
+      20,
+    )
+
+    expect(layout(timeline)).toEqual([
+      { start: 0, source: [0, 20] },
+      { start: 20, source: [0, 5] },
+      { start: 25, source: [20, 60] },
+    ])
+    expect(inserted).not.toBeNull()
+    expect(totalDuration(timeline)).toBe(65)
+  })
+
+  it('lands in a hole when holes are allowed', () => {
+    const holed = removeSpan(createTimeline(MEDIA, 30, 'gap'), span(10, 20))
+    const { timeline } = insertClip(holed, { mediaId: 'b.mp4', source: span(0, 4) }, 12)
+
+    expect(layout(timeline)).toEqual([
+      { start: 0, source: [0, 10] },
+      { start: 12, source: [0, 4] },
+      { start: 20, source: [20, 30] },
+    ])
+  })
+
+  it('never lets a pasted piece overlap what is already there', () => {
+    const timeline = createTimeline(MEDIA, 30, 'gap')
+    const { timeline: next } = insertClip(timeline, { mediaId: 'b.mp4', source: span(0, 4) }, 10)
+
+    expect(next.blocks).toHaveLength(2)
+    expect(next.blocks[1]!.start).toBe(30)
+  })
+
+  it('puts a duplicate directly after the block it came from', () => {
+    const { timeline } = duplicateBlock(fresh('join'), fresh('join').blocks[0]!.id)
+    // The ids differ per call, so this one duplicates a block of its own.
+    expect(timeline.blocks).toHaveLength(1)
+
+    const original = fresh('join')
+    const { timeline: doubled } = duplicateBlock(original, original.blocks[0]!.id)
+    expect(layout(doubled)).toEqual([
+      { start: 0, source: [0, 60] },
+      { start: 60, source: [0, 60] },
+    ])
+  })
+})
+
+describe('swapping a block with the one beside it', () => {
+  const three = () => splitAt(splitAt(fresh('join'), 20), 40)
+
+  it('changes the running order when the ends are joined', () => {
+    const timeline = three()
+    const second = timeline.blocks[1]!.id
+    const swapped = shiftBlock(timeline, second, -1)
+
+    expect(layout(swapped)).toEqual([
+      { start: 0, source: [20, 40] },
+      { start: 20, source: [0, 20] },
+      { start: 40, source: [40, 60] },
+    ])
+  })
+
+  it('refuses to move the first block further left', () => {
+    const timeline = three()
+    expect(shiftBlock(timeline, timeline.blocks[0]!.id, -1)).toBe(timeline)
+  })
+
+  /**
+   * With holes allowed the position is the user's, so a swap has to leave the
+   * pair's outer bounds and the hole between them exactly where they were.
+   */
+  it('trades places inside the stretch the pair already occupied', () => {
+    const timeline = removeSpan(setMode(three(), 'gap'), span(20, 25))
+    const swapped = shiftBlock(timeline, timeline.blocks[0]!.id, 1)
+
+    expect(layout(swapped)).toEqual([
+      { start: 0, source: [25, 40] },
+      { start: 20, source: [0, 20] },
+      { start: 40, source: [40, 60] },
+    ])
+    expect(totalDuration(swapped)).toBe(totalDuration(timeline))
+  })
+})
+
+describe('no two blocks ever claim the same instant', () => {
+  /** Every pair of blocks, checked for an overlap the invariant forbids. */
+  const overlapping = (timeline: Timeline) =>
+    timeline.blocks.some((block, index) =>
+      timeline.blocks.slice(index + 1).some((other) => overlaps(blockSpan(block), blockSpan(other))),
+    )
+
+  /** Two ten-second pieces with a ten-second hole between them. */
+  const holed = () => removeSpan(createTimeline(MEDIA, 30, 'gap'), span(10, 20))
+
+  /**
+   * With holes allowed nothing reflows out of the way, so an edge dragged past
+   * the block beside it used to land on top of it — which the timeline drew as
+   * one block over another, and which no export could describe.
+   */
+  it('stops a trimmed end where the next block begins', () => {
+    const start = holed()
+    const trimmed = trimBlock(start, start.blocks[0]!.id, 'end', 26, 30)
+
+    expect(overlapping(trimmed)).toBe(false)
+    expect(layout(trimmed)).toEqual([
+      { start: 0, source: [0, 20] },
+      { start: 20, source: [20, 30] },
+    ])
+  })
+
+  it('stops a trimmed start where the previous block ends', () => {
+    const start = holed()
+    const trimmed = trimBlock(start, start.blocks[1]!.id, 'start', 4, 30)
+
+    expect(overlapping(trimmed)).toBe(false)
+    // Pulled back only as far as the piece before it, which ends at ten.
+    expect(trimmed.blocks[1]!.start).toBeCloseTo(10, 6)
+  })
+
+  it('lets an edge reach the neighbour exactly, and no further', () => {
+    const start = holed()
+    const trimmed = trimBlock(start, start.blocks[0]!.id, 'end', 20, 30)
+
+    expect(overlapping(trimmed)).toBe(false)
+    expect(blockEnd(trimmed.blocks[0]!)).toBeCloseTo(20, 6)
+  })
+
+  /** With the ends joined the reflow moves everything along, so there is
+   *  nothing to collide with and a trim is free to grow. */
+  it('leaves a trim unbounded when holes are closed', () => {
+    const timeline = splitAt(fresh('join'), 20)
+    const trimmed = trimBlock(timeline, timeline.blocks[0]!.id, 'end', 45, 60)
+
+    expect(overlapping(trimmed)).toBe(false)
+    expect(layout(trimmed)).toEqual([
+      { start: 0, source: [0, 45] },
+      { start: 45, source: [20, 60] },
+    ])
+  })
+
+  it('holds across a move, a paste and a swap', () => {
+    let timeline = holed()
+    timeline = insertClip(timeline, { mediaId: 'b.mp4', source: span(0, 6) }, 12).timeline
+    timeline = moveBlock(timeline, timeline.blocks[0]!.id, 14)
+    timeline = shiftBlock(timeline, timeline.blocks[1]!.id, 1)
+
+    expect(overlapping(timeline)).toBe(false)
   })
 })

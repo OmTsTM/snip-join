@@ -17,7 +17,7 @@ import { TimelineDock } from '@presentation/features/timeline/TimelineDock'
 import { Welcome } from '@presentation/features/welcome/Welcome'
 import { useShortcuts } from '@presentation/hooks/useShortcuts'
 import { api } from '@infrastructure/tauri/api'
-import { connectBackendEvents, useEditor } from '@presentation/state/editorStore'
+import { connectBackendEvents, selectCanExport, useEditor } from '@presentation/state/editorStore'
 
 import { ErrorToast } from './ErrorToast'
 
@@ -25,12 +25,18 @@ export function App() {
   const t = useT()
   const phase = useEditor((state) => state.phase)
   const openFile = useEditor((state) => state.openFile)
+  const addMedia = useEditor((state) => state.addMedia)
+  const canExport = useEditor(selectCanExport)
 
   const [dropActive, setDropActive] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
-  const showExport = useCallback(() => setExportOpen(true), [])
+  // Guarded here rather than only on the button, so the keyboard cannot reach
+  // the dialog for a timeline that would produce no file.
+  const showExport = useCallback(() => {
+    if (useEditor.getState().history.present.blocks.length > 0) setExportOpen(true)
+  }, [])
   const showShortcuts = useCallback(() => setShortcutsOpen((open) => !open), [])
   useShortcuts({ onExport: showExport, onShowShortcuts: showShortcuts })
 
@@ -90,10 +96,15 @@ export function App() {
         setDropActive(false)
 
         if (event.payload.type === 'drop') {
-          // Only the first file is taken: this editor works on one video, and
-          // silently ignoring the rest is clearer than opening an arbitrary one.
+          // Only the first file is taken: opening an arbitrary one of several is
+          // worse than taking the one the pointer was over.
+          //
+          // Added to the project rather than opened in its place, matching the
+          // title bar: dropping a second file onto an edit means "and this one
+          // too", never "throw that away". `addMedia` opens it outright when
+          // nothing is loaded yet.
           const [first] = event.payload.paths
-          if (first) void openFile(first)
+          if (first) void addMedia(first)
         }
       })
       .then((unlisten) => {
@@ -105,7 +116,7 @@ export function App() {
       cancelled = true
       detach?.()
     }
-  }, [openFile])
+  }, [addMedia])
 
   const editing = phase !== 'empty'
 
@@ -122,25 +133,36 @@ export function App() {
             </section>
 
             <aside className="flex w-[312px] shrink-0 flex-col border-l border-line bg-ink/40">
+              {/*
+                Pinned at the top rather than under the panel.
+
+                It is still the control the whole column leads to, but at the
+                bottom it cost every list above it a row's height — on an
+                ordinary window the media and the blocks were both a scroll away,
+                so a project drawing on several files did not look like one. Up
+                here it is reachable at any window size and the two lists start
+                higher.
+              */}
+              <div className="shrink-0 border-b border-line p-3">
+                <Button
+                  tone="paper"
+                  size="md"
+                  full
+                  disabled={!canExport}
+                  title={canExport ? undefined : t('export.nothing')}
+                  onClick={showExport}
+                  icon={<ExportIcon size={15} />}
+                >
+                  {t('export.open')}
+                </Button>
+              </div>
+
               {/* Scrolls as one column. A short stage must cost the user scroll
                   distance, never a control they can no longer reach. */}
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
                 <SelectionPanel />
                 <MediaPool />
-              <BlockList />
-              </div>
-
-              {/* Pinned: the export button is where the whole panel leads. */}
-              <div className="shrink-0 border-t border-line p-3">
-                <Button
-                  tone="paper"
-                  size="lg"
-                  full
-                  onClick={showExport}
-                  icon={<ExportIcon size={16} />}
-                >
-                  {t('export.open')}
-                </Button>
+                <BlockList />
               </div>
             </aside>
           </div>

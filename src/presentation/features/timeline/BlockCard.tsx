@@ -1,11 +1,31 @@
-import { memo, useCallback, useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 
 import { duration as spanDuration, formatTimecode, snapTo } from '@domain/time'
 import { snapCandidates, type Block, type Timeline } from '@domain/timeline'
+import { ContextMenu, MENU_SEPARATOR, type MenuEntry } from '@presentation/components/ContextMenu'
+import {
+  Copy,
+  Duplicate,
+  MoveLeft,
+  MoveRight,
+  Paste,
+  Scissors,
+  Split,
+  Trash,
+} from '@presentation/components/Icons'
 import { cx } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { useEditor, type Thumbnail } from '@presentation/state/editorStore'
 
+import { beginDragScroll, endDragScroll } from './dragScroll'
 import { Filmstrip } from './Filmstrip'
 import { pixelsToTime, timeToPixels } from './geometry'
 
@@ -16,16 +36,37 @@ export const HANDLE_HEIGHT = 20
 /** How close a drag must come to an edge before it snaps, in pixels. */
 const SNAP_PIXELS = 8
 
+/**
+ * Narrowest a block may be drawn, in pixels.
+ *
+ * A hairline rather than a usable target, on purpose. A floor wide enough to
+ * grab is a floor that lies about where the block ends, and several short
+ * blocks side by side each get drawn over the next — indistinguishable from the
+ * overlap the timeline promises cannot happen, and exactly what a run of stills
+ * looked like. It existed because a still reported a fortieth of a second and
+ * came out two pixels wide; a still has a real length now, so the reason for it
+ * is gone. A genuinely short piece is reached by zooming in.
+ */
+const MIN_BLOCK_WIDTH = 2
+
 interface BlockCardProps {
   readonly block: Block
   readonly index: number
   readonly timeline: Timeline
   readonly pixelsPerSecond: number
-  readonly sourceDuration: number
+  /**
+   * How much material the block's own medium holds.
+   *
+   * Its own, not the project's first file: this decides whether an edge is torn
+   * or clean, and comparing a second file's block against the first file's
+   * length draws the mark on the wrong seams.
+   */
+  readonly mediumDuration: number
   readonly thumbnails: readonly Thumbnail[]
   /** Full height of the card, which the dock divider controls. */
   readonly height: number
   readonly dragging: boolean
+  readonly selected: boolean
   readonly onDragStateChange: (id: string | null) => void
 }
 
@@ -43,10 +84,11 @@ export const BlockCard = memo(function BlockCard({
   index,
   timeline,
   pixelsPerSecond,
-  sourceDuration,
+  mediumDuration,
   thumbnails,
   height,
   dragging,
+  selected,
   onDragStateChange,
 }: BlockCardProps) {
   const stripHeight = Math.max(1, height - HANDLE_HEIGHT)
@@ -55,13 +97,71 @@ export const BlockCard = memo(function BlockCard({
   const trimBlock = useEditor((state) => state.trimBlock)
   const beginGesture = useEditor((state) => state.beginGesture)
   const snapToCutPoint = useEditor((state) => state.snapToCutPoint)
+  const selectBlock = useEditor((state) => state.selectBlock)
+  const setSelection = useEditor((state) => state.setSelection)
 
-  const left = timeToPixels(block.start, pixelsPerSecond)
-  const width = Math.max(2, spanDuration(block.source) * pixelsPerSecond)
+  const settledLeft = timeToPixels(block.start, pixelsPerSecond)
+  const width = Math.max(MIN_BLOCK_WIDTH, spanDuration(block.source) * pixelsPerSecond)
+
+  /**
+   * A dragged card is drawn in the slot it has been given, never under the
+   * pointer.
+   *
+   * Following the pointer is the obvious thing and it is wrong here: with the
+   * ends joined, position has no meaning — only the running order does — so a
+   * card carried between slots is drawn across whatever it passes, which reads
+   * as two blocks overlapping and is the one thing the timeline promises cannot
+   * happen. Left in its slot with the transition switched on, it glides into
+   * each new place as the drag crosses a midpoint, the block it displaced glides
+   * the other way, and the swap is visible while it happens without either card
+   * ever covering the other.
+   *
+   * With holes allowed the position *is* literal, so `start` already tracks the
+   * pointer exactly — and the transition comes off, because a continuous
+   * position should not lag behind the hand moving it.
+   */
+  const gliding = dragging && timeline.mode === 'join'
+  const left = settledLeft
+
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
 
   // Grab offset is kept in a ref: it is read on every pointer move and changing
   // it must never trigger a render.
   const grabOffset = useRef(0)
+  /**
+   * Where the pointer last was, so the drag can be replayed without one.
+   *
+   * The dock scrolls itself when a drag reaches the edge of the view, and that
+   * moves the canvas out from under a pointer that has not moved. Replaying the
+   * placement against the new scroll is what keeps the block following the
+   * pointer instead of freezing the moment the view starts to travel.
+   */
+  const lastPointerX = useRef(0)
+  const card = useRef<HTMLDivElement>(null)
+
+  /**
+   * Places the block for a pointer at `clientX`.
+   *
+   * Split out from the pointer handler because two different things ask for it:
+   * the pointer moving, and the canvas moving under a still pointer.
+   */
+  const placeAt = useCallback(
+    (clientX: number, canvas: HTMLElement) => {
+      const canvasLeft = canvas.getBoundingClientRect().left
+      const offset = clientX - canvasLeft - grabOffset.current
+      const desired = pixelsToTime(offset, pixelsPerSecond)
+
+      // Snapping is applied in time, using a pixel threshold, so it feels the
+      // same at every zoom level rather than getting stickier as you zoom out.
+      const snapped = snapTo(
+        desired,
+        snapCandidates(timeline, block.id),
+        SNAP_PIXELS / pixelsPerSecond,
+      )
+      moveBlock(block.id, Math.max(0, snapped))
+    },
+    [block.id, moveBlock, pixelsPerSecond, timeline],
+  )
 
   const startMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -76,11 +176,22 @@ export const BlockCard = memo(function BlockCard({
       if (!canvas) return
 
       const canvasLeft = canvas.getBoundingClientRect().left
-      grabOffset.current = event.clientX - canvasLeft - left
+      grabOffset.current = event.clientX - canvasLeft - settledLeft
+      lastPointerX.current = event.clientX
+      // Reaching for a block is choosing it, whether or not the drag goes
+      // anywhere: letting go without moving still leaves it selected.
+      selectBlock(block.id)
+      beginDragScroll()
+      // The rails mark instants on the timeline, and reordering moves the
+      // footage out from under them: a stretch marked before the drag is over
+      // different material afterwards. Dropping them is the only honest answer,
+      // and leaving them behind made the block look like it was still about to
+      // be cut while it was being carried.
+      setSelection(null)
       beginGesture()
       onDragStateChange(block.id)
     },
-    [beginGesture, block.id, left, onDragStateChange],
+    [beginGesture, block.id, settledLeft, onDragStateChange, selectBlock, setSelection],
   )
 
   const move = useCallback(
@@ -90,22 +201,24 @@ export const BlockCard = memo(function BlockCard({
       const canvas = event.currentTarget.closest('[data-timeline-canvas]') as HTMLElement | null
       if (!canvas) return
 
-      const canvasLeft = canvas.getBoundingClientRect().left
-      const offset = event.clientX - canvasLeft - grabOffset.current
-      const desired = pixelsToTime(offset, pixelsPerSecond)
-
-      // Snapping is applied in time, using a pixel threshold, so it feels the
-      // same at every zoom level rather than getting stickier as you zoom out.
-      const snapped = snapTo(
-        desired,
-        snapCandidates(timeline, block.id),
-        SNAP_PIXELS / pixelsPerSecond,
-      )
-
-      moveBlock(block.id, Math.max(0, snapped))
+      lastPointerX.current = event.clientX
+      placeAt(event.clientX, canvas)
     },
-    [block.id, dragging, moveBlock, pixelsPerSecond, timeline],
+    [dragging, placeAt],
   )
+
+  // Replayed whenever the dock scrolls itself out from under a still pointer.
+  useEffect(() => {
+    if (!dragging) return
+
+    const canvas = card.current?.closest('[data-timeline-canvas]') as HTMLElement | null
+    const viewport = canvas?.parentElement
+    if (!canvas || !viewport) return
+
+    const onScroll = () => placeAt(lastPointerX.current, canvas)
+    viewport.addEventListener('scroll', onScroll)
+    return () => viewport.removeEventListener('scroll', onScroll)
+  }, [dragging, placeAt])
 
   const endMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -113,6 +226,7 @@ export const BlockCard = memo(function BlockCard({
         event.currentTarget.releasePointerCapture(event.pointerId)
       }
       onDragStateChange(null)
+      endDragScroll()
     },
     [onDragStateChange],
   )
@@ -125,58 +239,111 @@ export const BlockCard = memo(function BlockCard({
 
       const target = event.currentTarget
       target.setPointerCapture(event.pointerId)
+      selectBlock(block.id)
       beginGesture()
+      beginDragScroll()
 
       const canvas = target.closest('[data-timeline-canvas]') as HTMLElement | null
-      if (!canvas) return
-      const canvasLeft = canvas.getBoundingClientRect().left
+      const viewport = canvas?.parentElement
+      if (!canvas || !viewport) {
+        endDragScroll()
+        return
+      }
+
+      let pointerX = event.clientX
+
+      const apply = () => {
+        // The canvas rect is read on every move rather than captured once: the
+        // dock scrolls itself when a trim reaches the edge of the window, and a
+        // cached left edge would make the block shrink as the view travelled.
+        const raw = pixelsToTime(pointerX - canvas.getBoundingClientRect().left, pixelsPerSecond)
+        // A trimmed edge becomes an export boundary, so it snaps to cut points
+        // for the same reason the selection rails do. Named explicitly, because
+        // a trim reaches outside the block's current range and asking what sits
+        // under the instant would answer with the neighbour.
+        trimBlock(block.id, edge, snapToCutPoint(raw, block.id))
+      }
 
       const onMove = (pointer: PointerEvent) => {
-        const raw = pixelsToTime(pointer.clientX - canvasLeft, pixelsPerSecond)
-        // A trimmed edge becomes an export boundary, so it snaps to cut points
-        // for the same reason the selection rails do.
-        const at = snapToCutPoint(raw)
-        trimBlock(block.id, edge, at)
+        pointerX = pointer.clientX
+        apply()
       }
+
+      // Replayed whenever the view scrolls out from under a still pointer, which
+      // is the whole of what makes an edge at the far right reachable.
+      const onScroll = () => apply()
 
       const onUp = () => {
         target.removeEventListener('pointermove', onMove)
         target.removeEventListener('pointerup', onUp)
         target.removeEventListener('pointercancel', onUp)
+        viewport.removeEventListener('scroll', onScroll)
+        endDragScroll()
       }
 
       target.addEventListener('pointermove', onMove)
       target.addEventListener('pointerup', onUp)
       target.addEventListener('pointercancel', onUp)
+      viewport.addEventListener('scroll', onScroll)
     },
-    [beginGesture, block.id, pixelsPerSecond, snapToCutPoint, trimBlock],
+    [beginGesture, block.id, pixelsPerSecond, selectBlock, snapToCutPoint, trimBlock],
+  )
+
+  const openMenu = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      // Before anything else: the window suppresses the browser's own menu in a
+      // listener of its own, and stopping propagation here would keep the event
+      // from ever reaching it.
+      event.preventDefault()
+      event.stopPropagation()
+      selectBlock(block.id)
+      setMenuAt({ x: event.clientX, y: event.clientY })
+    },
+    [block.id, selectBlock],
   )
 
   // A clean edge means the original boundary of the video; a torn edge means a
   // cut the user made. Showing the difference is what lets someone tell at a
   // glance which seams are theirs.
   const tornStart = block.source.start > 1e-3
-  const tornEnd = block.source.end < sourceDuration - 1e-3
+  const tornEnd = block.source.end < mediumDuration - 1e-3
+
+  const glide = 'left 220ms cubic-bezier(0.22,1,0.36,1)'
+  const settle = 'width 200ms cubic-bezier(0.22,1,0.36,1), transform 160ms cubic-bezier(0.22,1,0.36,1)'
 
   return (
-    <div
-      className={cx(
-        'group absolute top-0 select-none',
-        dragging ? 'z-20' : 'z-10',
-      )}
-      style={{
-        left,
-        width,
-        height,
-        transition: dragging ? 'none' : 'left 260ms cubic-bezier(0.22,1,0.36,1), width 200ms cubic-bezier(0.22,1,0.36,1)',
-      }}
-    >
+    <>
+      <div
+        ref={card}
+        className={cx(
+          'group absolute top-0 select-none',
+          dragging ? 'z-20' : selected ? 'z-[15]' : 'z-10',
+        )}
+        onContextMenu={openMenu}
+        style={{
+          left,
+          width,
+          height,
+          // Lifted a little while it is in hand. It never covers a neighbour, so
+          // this says "held" rather than excusing an overlap.
+          transform: dragging ? 'translateY(-4px)' : undefined,
+          transition: gliding ? `${glide}, ${settle}` : dragging ? settle : `${glide}, ${settle}`,
+        }}
+      >
       <div
         className={cx(
           'relative h-full overflow-hidden rounded-[var(--radius-block)] border',
+          'transition-[border-color,box-shadow] duration-150',
           dragging
             ? 'border-snip shadow-[0_18px_40px_-18px_rgba(249,129,30,0.75)]'
-            : 'border-line-bright group-hover:border-faint',
+            : selected
+              // Paper, not orange. Orange is the colour of cutting, and choosing
+              // a block removes nothing — it says which piece the keyboard, the
+              // menu and the clipboard are about to act on. A ring outside the
+              // border rather than a thicker border, so the card does not change
+              // size the moment it is picked.
+              ? 'border-paper shadow-[0_0_0_1.5px_var(--color-paper),0_16px_36px_-18px_rgba(244,230,214,0.5)]'
+              : 'border-line-bright group-hover:border-faint',
         )}
       >
         {/* The grab handle. Knurled so it reads as something to hold. */}
@@ -189,7 +356,11 @@ export const BlockCard = memo(function BlockCard({
           className={cx(
             'knurl relative flex items-center gap-1.5 px-1.5',
             'cursor-grab active:cursor-grabbing',
-            dragging ? 'bg-snip text-ink' : 'bg-raised-hi text-paper',
+            dragging
+              ? 'bg-snip text-ink'
+              : selected
+                ? 'bg-paper text-ink'
+                : 'bg-raised-hi text-paper',
           )}
           style={{ height: HANDLE_HEIGHT }}
         >
@@ -236,9 +407,116 @@ export const BlockCard = memo(function BlockCard({
       >
         <span className="absolute inset-y-2 right-[2px] w-[2px] rounded-full bg-paper/0 transition-colors duration-150 group-hover:bg-paper/45" />
       </div>
-    </div>
+
+        {menuAt && (
+          <BlockMenu block={block} index={index} at={menuAt} onClose={() => setMenuAt(null)} />
+        )}
+      </div>
+    </>
   )
 })
+
+/**
+ * Everything that can be done to one block, in one place.
+ *
+ * A separate component so the entries — and the store reads they need — are
+ * built only while the menu is actually open, rather than on every frame of a
+ * sixty-hertz drag.
+ */
+function BlockMenu({
+  block,
+  index,
+  at,
+  onClose,
+}: {
+  readonly block: Block
+  readonly index: number
+  readonly at: { readonly x: number; readonly y: number }
+  readonly onClose: () => void
+}) {
+  const t = useT()
+  const timeline = useEditor((state) => state.history.present)
+  const hasClipboard = useEditor((state) => state.clipboard !== null)
+  const copyBlock = useEditor((state) => state.copyBlock)
+  const cutBlock = useEditor((state) => state.cutBlock)
+  const pasteAtPlayhead = useEditor((state) => state.pasteAtPlayhead)
+  const duplicateBlock = useEditor((state) => state.duplicateBlock)
+  const splitAtPlayhead = useEditor((state) => state.splitAtPlayhead)
+  const shiftBlock = useEditor((state) => state.shiftBlock)
+  const deleteBlock = useEditor((state) => state.deleteBlock)
+
+  const last = timeline.blocks.length - 1
+  const only = timeline.blocks.length <= 1
+
+  const entries: MenuEntry[] = [
+    {
+      id: 'copy',
+      label: t('blocks.copy'),
+      shortcut: 'Ctrl C',
+      icon: <Copy size={14} />,
+      onSelect: () => copyBlock(block.id),
+    },
+    {
+      id: 'cut',
+      label: t('blocks.cut'),
+      shortcut: 'Ctrl X',
+      icon: <Scissors size={14} />,
+      disabled: only,
+      onSelect: () => cutBlock(block.id),
+    },
+    {
+      id: 'paste',
+      label: t('blocks.paste'),
+      shortcut: 'Ctrl V',
+      icon: <Paste size={14} />,
+      disabled: !hasClipboard,
+      onSelect: pasteAtPlayhead,
+    },
+    MENU_SEPARATOR,
+    {
+      id: 'duplicate',
+      label: t('blocks.duplicate'),
+      icon: <Duplicate size={14} />,
+      onSelect: () => duplicateBlock(block.id),
+    },
+    {
+      id: 'split',
+      label: t('blocks.split'),
+      shortcut: 'S',
+      icon: <Split size={14} />,
+      onSelect: splitAtPlayhead,
+    },
+    MENU_SEPARATOR,
+    {
+      id: 'earlier',
+      label: t('blocks.moveEarlier'),
+      shortcut: 'Alt ←',
+      icon: <MoveLeft size={14} />,
+      disabled: index === 0,
+      onSelect: () => shiftBlock(block.id, -1),
+    },
+    {
+      id: 'later',
+      label: t('blocks.moveLater'),
+      shortcut: 'Alt →',
+      icon: <MoveRight size={14} />,
+      disabled: index === last,
+      onSelect: () => shiftBlock(block.id, 1),
+    },
+    MENU_SEPARATOR,
+    {
+      id: 'delete',
+      label: t('blocks.delete'),
+      shortcut: 'Del',
+      icon: <Trash size={14} />,
+      tone: 'snip',
+      disabled: only,
+      onSelect: () => deleteBlock(block.id),
+    },
+  ]
+
+  return <ContextMenu at={at} entries={entries} onClose={onClose} />
+}
 
 /**
  * The zigzag left where the strip was cut.

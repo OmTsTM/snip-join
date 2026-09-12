@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "splash",
+  "description": "Everything the splash window is allowed to do: open the one address its credit line points at. Deliberately separate from the editor's capability rather than adding this window to it — the splash has no business with dialogs, window chrome or the asset protocol, and a shared list would hand it all three.",
+  "windows": ["splash"],
+  "permissions": [
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://ko-fi.com/omtstm" }]
+    }
+  ]
+}

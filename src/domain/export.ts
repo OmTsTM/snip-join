@@ -78,10 +78,19 @@ export function canCopyStreams(
   spec: ExportSpec,
   hasGaps: boolean,
   spansMedia: boolean,
+  usesStill = false,
 ): boolean {
   // Two files cannot be copied into one stream however alike their encodings
-  // look, which puts a second file in the same category as a hole.
-  return !hasGaps && !spansMedia && spec.upscale === 'none' && isRestorationOff(spec.restoration)
+  // look, which puts a second file in the same category as a hole. A still is a
+  // third: it is one packet that has to be looped into a stretch of video, and
+  // a copy would make a five second title card last a single frame.
+  return (
+    !hasGaps &&
+    !spansMedia &&
+    !usesStill &&
+    spec.upscale === 'none' &&
+    isRestorationOff(spec.restoration)
+  )
 }
 
 export function isRestorationOff(restoration: Restoration): boolean {

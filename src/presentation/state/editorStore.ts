@@ -21,8 +21,12 @@ import { clamp, snapToFrame, span, type Span } from '@domain/time'
 import {
   appendMedium,
   blockAt,
+  coveredSpan,
   mediaAt,
   createTimeline,
+  duplicateBlock as duplicateBlockIn,
+  findBlock,
+  insertClip,
   isolateSpan,
   mediaOrder,
   keptDuration,
@@ -30,11 +34,14 @@ import {
   removeBlock as removeBlockIn,
   removeSpan,
   setMode as setModeIn,
+  shiftBlock as shiftBlockIn,
   splitAt,
   totalDuration,
   trimBlock as trimBlockIn,
   withBlocks,
+  type Block,
   type BlockId,
+  type Clip,
   type Timeline,
   type TimelineMode,
 } from '@domain/timeline'
@@ -51,6 +58,24 @@ import {
 
 /** How many filmstrip frames to sample across the whole source. */
 const THUMBNAIL_COUNT = 80
+
+/**
+ * How close a cut has to come to a cut point before it is pulled onto it, in
+ * pixels.
+ *
+ * A distance, not "the nearest one wherever it is". Some files carry almost no
+ * cut points at all — an animated GIF has exactly one, at the start — and
+ * against a list like that an unbounded snap drags *every* cut back to the same
+ * instant: a trimmed edge collapses to nothing the moment it is touched, and a
+ * selection can only ever cover the whole block. Measured in pixels, so it
+ * behaves the same at every zoom, and generous enough that footage with cut
+ * points every few seconds still snaps onto them the way it always did.
+ *
+ * What is given up is exactness on sparse footage, and the export dialog
+ * already says so: it reports how far a copy would move each cut, or that a
+ * copy is off the table entirely.
+ */
+const SNAP_PIXELS = 12
 
 export interface Thumbnail {
   readonly at: number
@@ -110,18 +135,18 @@ interface EditorState {
   pendingFrames: number
 
   /**
-   * Positions a stream copy can cut at, for the first medium.
+   * Positions a stream copy can cut at, per medium, keyed by path.
    *
-   * Only the first: a timeline reading from several files cannot be copied at
-   * all, so cut points for the others would describe an export that is not on
-   * offer. The export dialog says as much rather than showing positions that
-   * cannot be honoured.
+   * Per medium rather than one list: they are positions *in a file*, so a single
+   * list cannot describe a timeline reading from several. Snapping against the
+   * first file's list beyond its own length pulled every cut on a later file
+   * back into the first one, which made the newer media impossible to select on.
    *
    * Held here rather than derived because reading them costs a process launch,
    * and because both the timeline and the export dialog need the same answer.
    */
-  keyframes: readonly number[]
-  keyframesTruncated: boolean
+  keyframes: Readonly<Record<string, readonly number[]>>
+  keyframesTruncated: Readonly<Record<string, boolean>>
 
   /**
    * Whether cuts are pulled onto the nearest cut point.
@@ -141,6 +166,26 @@ interface EditorState {
    */
   timelineHeight: number
 
+  /**
+   * The block the user last pointed at, if any.
+   *
+   * A second kind of selection, and deliberately not the same one as the rails:
+   * the rails mark a stretch of *time* to take out, this marks a *piece* to act
+   * on. Delete, copy, cut and the block menu all read this, which is what lets
+   * the keyboard reach a block at all.
+   */
+  selectedBlock: BlockId | null
+
+  /**
+   * The piece a copy or a cut put aside, ready to be pasted.
+   *
+   * A clip rather than a block: a block carries a position on the timeline, and
+   * the position a paste lands at is the playhead's, not the one it was copied
+   * from. Held outside the undo history, which records the timeline and not what
+   * the user happens to be holding.
+   */
+  clipboard: Clip | null
+
   exportJob: ExportJob | null
   lastExport: ExportOutcome | null
   error: AppError | null
@@ -155,13 +200,20 @@ interface EditorState {
   mediaToken: string
 
   openFile: (path: string) => Promise<void>
-  addMedia: (path: string) => Promise<void>
+  /** Adds a file, appended to the end unless a position is given. */
+  addMedia: (path: string, at?: number) => Promise<void>
   removeMedium: (mediaId: string) => Promise<void>
   closeFile: () => Promise<void>
 
   setSelection: (selection: Span | null) => void
-  /** Pulls an instant onto the nearest cut point while snapping is on. */
-  snapToCutPoint: (at: number) => number
+  /**
+   * Pulls an instant onto the nearest cut point while snapping is on.
+   *
+   * `blockId` names the block the instant belongs to when the caller already
+   * knows — a trim reaches outside the block's current range, so looking up what
+   * sits under the instant would answer with the neighbour.
+   */
+  snapToCutPoint: (at: number, blockId?: BlockId) => number
   setSnapToCutPoints: (enabled: boolean) => void
   setTimelineHeight: (height: number) => void
   markIn: () => void
@@ -176,6 +228,14 @@ interface EditorState {
   moveBlock: (id: BlockId, start: number) => void
   trimBlock: (id: BlockId, edge: 'start' | 'end', at: number) => void
   deleteBlock: (id: BlockId) => void
+
+  selectBlock: (id: BlockId | null) => void
+  /** Moves a block one place along the running order. */
+  shiftBlock: (id: BlockId, direction: 1 | -1) => void
+  duplicateBlock: (id: BlockId) => void
+  copyBlock: (id: BlockId) => void
+  cutBlock: (id: BlockId) => void
+  pasteAtPlayhead: () => void
 
   undo: () => void
   redo: () => void
@@ -278,6 +338,26 @@ async function loadPreview(source: MediaSourceInfo, token: string): Promise<void
   }
 }
 
+/**
+ * Reads one medium's cut points in the background.
+ *
+ * Not awaited: the timeline works without them and simply gains snapping when
+ * they land. Every medium gets its own read, because a cut point is a position
+ * inside a file and there is no such thing as a shared list.
+ */
+function loadKeyframes(source: MediaSourceInfo, token: string): void {
+  void api
+    .keyframes(source.path)
+    .then((report) => {
+      if (useEditor.getState().mediaToken !== token) return
+      useEditor.setState((state) => ({
+        keyframes: { ...state.keyframes, [source.path]: report.positions },
+        keyframesTruncated: { ...state.keyframesTruncated, [source.path]: report.truncated },
+      }))
+    })
+    .catch(() => undefined)
+}
+
 /** Starts filling one medium's filmstrip. The frames arrive as events. */
 function loadFrames(source: MediaSourceInfo, token: string): void {
   useEditor.setState((state) => ({ pendingFrames: state.pendingFrames + 1 }))
@@ -321,10 +401,13 @@ export const useEditor = create<EditorState>((set, get) => ({
   pixelsPerSecond: 40,
   thumbnails: {},
   pendingFrames: 0,
-  keyframes: [],
-  keyframesTruncated: false,
+  keyframes: {},
+  keyframesTruncated: {},
   snapToCutPoints: true,
   timelineHeight: readStoredDockHeight(),
+
+  selectedBlock: null,
+  clipboard: null,
 
   exportJob: null,
   lastExport: null,
@@ -341,6 +424,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       proxies: {},
       thumbnails: {},
       lastExport: null,
+      selectedBlock: null,
       mediaToken: token,
     })
 
@@ -354,8 +438,8 @@ export const useEditor = create<EditorState>((set, get) => ({
         phase: 'preparing',
         history: createHistory(createTimeline(source.path, source.duration, 'join')),
         selection: null,
-        keyframes: [],
-        keyframesTruncated: false,
+        keyframes: {},
+        keyframesTruncated: {},
         playhead: 0,
         playing: false,
         proxyProgress: 0,
@@ -373,18 +457,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       set({ phase: 'ready' })
 
       loadFrames(source, token)
-
-      // Cut points decide whether a copy is exact, so they are read as soon as
-      // the editor is usable. Not awaited: the timeline works without them and
-      // simply gains snapping when they land. Only for the first file: a
-      // timeline spanning several cannot be copied at all.
-      void api
-        .keyframes(source.path)
-        .then((report) => {
-          if (get().mediaToken !== token) return
-          set({ keyframes: report.positions, keyframesTruncated: report.truncated })
-        })
-        .catch(() => undefined)
+      loadKeyframes(source, token)
     } catch (error) {
       if (get().mediaToken !== token) return
       set({ phase: 'empty', source: null, media: [] })
@@ -393,12 +466,14 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   /**
-   * Adds another file and puts the whole of it after everything already there.
+   * Adds another file to the project and puts a block of it on the timeline.
    *
-   * Appended rather than placed: where it belongs is the user's business, and
-   * every gesture for moving a block already exists.
+   * Appended by default, because where a whole file belongs is the user's
+   * business. `at` is what a drag out of the media pool passes: a drop says
+   * exactly where it goes, so there is no reason to make the user move it
+   * afterwards.
    */
-  async addMedia(path) {
+  async addMedia(path, at) {
     const { mediaToken: token, phase } = get()
     if (phase === 'empty') {
       await get().openFile(path)
@@ -414,18 +489,25 @@ export const useEditor = create<EditorState>((set, get) => ({
       // a second entry in the pool or a second read of its frames.
       const known = get().media.some((medium) => medium.path === source.path)
 
-      set((state) => ({
-        media: known ? state.media : [...state.media, source],
-        history: record(
-          state.history,
-          appendMedium(state.history.present, source.path, source.duration),
-        ),
-      }))
+      set((state) => {
+        const timeline = state.history.present
+        const placed =
+          at === undefined
+            ? appendMedium(timeline, source.path, source.duration)
+            : insertClip(timeline, { mediaId: source.path, source: span(0, source.duration) }, at)
+                .timeline
+
+        return {
+          media: known ? state.media : [...state.media, source],
+          history: record(state.history, placed),
+        }
+      })
 
       if (known) return
 
-        await loadPreview(source, token)
+      await loadPreview(source, token)
       loadFrames(source, token)
+      loadKeyframes(source, token)
     } catch (error) {
       if (get().mediaToken !== token) return
       get().reportError(error)
@@ -448,15 +530,25 @@ export const useEditor = create<EditorState>((set, get) => ({
       const previewUrls = { ...state.previewUrls }
       const proxies = { ...state.proxies }
       const thumbnails = { ...state.thumbnails }
+      const keyframes = { ...state.keyframes }
+      const keyframesTruncated = { ...state.keyframesTruncated }
       delete previewUrls[mediaId]
       delete proxies[mediaId]
       delete thumbnails[mediaId]
+      delete keyframes[mediaId]
+      delete keyframesTruncated[mediaId]
 
       return {
         media: state.media.filter((medium) => medium.path !== mediaId),
         previewUrls,
         proxies,
         thumbnails,
+        keyframes,
+        keyframesTruncated,
+        selectedBlock: null,
+        // A piece of a file the project no longer holds must not stay on the
+        // clipboard: pasting it would name a medium the export cannot read.
+        clipboard: state.clipboard?.mediaId === mediaId ? null : state.clipboard,
         history: record(state.history, withBlocks(state.history.present, blocks)),
       }
     })
@@ -479,22 +571,49 @@ export const useEditor = create<EditorState>((set, get) => ({
       playing: false,
       thumbnails: {},
       pendingFrames: 0,
-      keyframes: [],
-      keyframesTruncated: false,
+      keyframes: {},
+      keyframesTruncated: {},
+      selectedBlock: null,
+      clipboard: null,
       exportJob: null,
       lastExport: null,
       mediaToken: '',
     })
   },
 
-  snapToCutPoint(at) {
-    const { snapToCutPoints, keyframes } = get()
+  snapToCutPoint(at, blockId) {
+    const { snapToCutPoints, keyframes, keyframesTruncated, history, pixelsPerSecond } = get()
     if (!snapToCutPoints) return at
 
-    // The nearest one, at any distance. A threshold would make snapping useless
-    // on the very footage that needs it most: long groups of pictures put the
-    // cut points far apart, and those are exactly the cuts that drift.
-    return nearestKeyframe(keyframes, at) ?? at
+    // Cut points are positions inside a file, and the timeline has been reflowed
+    // and reordered since that file was opened, so the instant is carried into
+    // the block's own source coordinates, snapped there, and carried back.
+    // Snapping in timeline coordinates aimed at a position in the first file:
+    // past its length every cut on a later medium was dragged back into it,
+    // which made the newer media impossible to mark a selection on at all.
+    const block = blockId
+      ? findBlock(history.present, blockId)
+      : blockAt(history.present, at)
+    if (!block) return at
+
+    // Footage with more cut points than were listed can be cut anywhere, so
+    // there is nothing to be pulled onto — and the list that came back is only
+    // the first of them, which would drag every later cut backwards.
+    if (keyframesTruncated[block.mediaId]) return at
+
+    const positions = keyframes[block.mediaId]
+    if (!positions || positions.length === 0) return at
+
+    const inSource = block.source.start + (at - block.start)
+    const snapped = nearestKeyframe(positions, inSource)
+    if (snapped === null) return at
+
+    // Out of reach: the cut stays where it was put. This is the whole of what
+    // keeps a file with one cut point from collapsing every edit onto it.
+    const reach = SNAP_PIXELS / Math.max(pixelsPerSecond, 1e-6)
+    if (Math.abs(snapped - inSource) > reach) return at
+
+    return block.start + (snapped - block.source.start)
   },
 
   setSnapToCutPoints(enabled) {
@@ -543,16 +662,24 @@ export const useEditor = create<EditorState>((set, get) => ({
     const { selection, history } = get()
     if (!selection) return
 
-    const next = removeSpan(history.present, selection)
-    // Everything removed would leave nothing to export, which is never what the
-    // user meant by "remove this part".
-    if (next.blocks.length === 0) return
+    // Narrowed to the material underneath first. The rails can be dragged
+    // across a hole, and a hole holds nothing: a range that covers only one is
+    // an absence, and cutting an absence is not an edit. Anything that survives
+    // the narrowing is removed, so a range that merely *overlaps* a hole still
+    // works and takes out exactly the footage it was covering.
+    const covered = coveredSpan(history.present, selection)
+    if (!covered) return
 
+    // Removing everything is allowed: the media pool still holds the files, so
+    // an empty timeline is a fresh start rather than a dead end. What it is not
+    // is exportable, which the Export button says for itself.
+    const next = removeSpan(history.present, covered)
     const total = totalDuration(next)
     set({
       history: record(history, next),
       selection: null,
-      playhead: clamp(selection.start, 0, total),
+      selectedBlock: null,
+      playhead: clamp(covered.start, 0, total),
     })
   },
 
@@ -560,8 +687,13 @@ export const useEditor = create<EditorState>((set, get) => ({
     const { selection, history } = get()
     if (!selection) return
 
-    const { timeline } = isolateSpan(history.present, selection)
-    set({ history: record(history, timeline), selection: null })
+    // Lifting an empty hole would make a block out of nothing, for the same
+    // reason removing one takes nothing out.
+    const covered = coveredSpan(history.present, selection)
+    if (!covered) return
+
+    const { timeline, isolated } = isolateSpan(history.present, covered)
+    set({ history: record(history, timeline), selection: null, selectedBlock: isolated })
   },
 
   setMode(mode) {
@@ -593,10 +725,18 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   trimBlock(id, edge, at) {
-    const { history, source } = get()
-    if (!source) return
+    const { history, media } = get()
 
-    const next = trimBlockIn(history.present, id, edge, at, source.duration)
+    // The block's own medium, not the project's first one. Trimming clamps
+    // against how much material there is, and a second file is rarely the same
+    // length as the first — a still is not even the same kind of thing, since
+    // its one frame stretches to whatever the preview copy covers.
+    const block = findBlock(history.present, id)
+    if (!block) return
+    const medium = media.find((candidate) => candidate.path === block.mediaId)
+    if (!medium) return
+
+    const next = trimBlockIn(history.present, id, edge, at, medium.maxDuration)
     if (next === history.present) return
 
     set({ history: gestureOpen ? amend(history, next) : record(history, next) })
@@ -605,25 +745,93 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   deleteBlock(id) {
     const { history } = get()
-    if (history.present.blocks.length <= 1) return
+    // `settle` rebuilds the list either way, so an identity check would never
+    // catch a delete that removed nothing. Asking whether the block is there is
+    // what keeps a stale id out of the undo history.
+    if (!findBlock(history.present, id)) return
 
     const next = removeBlockIn(history.present, id)
+
     set({
       history: record(history, next),
+      selectedBlock: get().selectedBlock === id ? null : get().selectedBlock,
       playhead: clamp(get().playhead, 0, totalDuration(next)),
     })
+  },
+
+  selectBlock(id) {
+    if (get().selectedBlock === id) return
+    set({ selectedBlock: id })
+  },
+
+  shiftBlock(id, direction) {
+    const { history } = get()
+    const next = shiftBlockIn(history.present, id, direction)
+    if (next === history.present) return
+    set({ history: record(history, next), selectedBlock: id })
+  },
+
+  duplicateBlock(id) {
+    const { history } = get()
+    const { timeline, inserted } = duplicateBlockIn(history.present, id)
+    if (timeline === history.present) return
+    set({ history: record(history, timeline), selectedBlock: inserted })
+  },
+
+  copyBlock(id) {
+    const block = findBlock(get().history.present, id)
+    if (!block) return
+    set({ clipboard: { mediaId: block.mediaId, source: block.source }, selectedBlock: id })
+  },
+
+  cutBlock(id) {
+    get().copyBlock(id)
+    get().deleteBlock(id)
+  },
+
+  /**
+   * Puts whatever was copied or cut back on the timeline, at the playhead.
+   *
+   * The playhead rather than where it came from: a paste is a placement, and the
+   * position the user is looking at is the one they mean.
+   */
+  pasteAtPlayhead() {
+    const { clipboard, history, playhead, media } = get()
+    if (!clipboard) return
+
+    // A file dropped from the project between the copy and the paste would put a
+    // block on the timeline that no export could read.
+    if (!media.some((medium) => medium.path === clipboard.mediaId)) {
+      set({ clipboard: null })
+      return
+    }
+
+    const { timeline, inserted } = insertClip(history.present, clipboard, playhead)
+    if (timeline === history.present) return
+
+    set({ history: record(history, timeline), selection: null, selectedBlock: inserted })
   },
 
   undo() {
     if (!canUndo(get().history)) return
     const history = undoHistory(get().history)
-    set({ history, playhead: clamp(get().playhead, 0, totalDuration(history.present)), selection: null })
+    set({
+      history,
+      playhead: clamp(get().playhead, 0, totalDuration(history.present)),
+      selection: null,
+      selectedBlock: null,
+    })
   },
 
   redo() {
     if (!canRedo(get().history)) return
     const history = redoHistory(get().history)
-    set({ history, playhead: clamp(get().playhead, 0, totalDuration(history.present)), selection: null })
+    set({
+      history,
+      playhead: clamp(get().playhead, 0, totalDuration(history.present)),
+      selection: null,
+      selectedBlock: null,
+    })
   },
 
   seek(at) {
@@ -680,7 +888,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   async runExport(spec, destination) {
     const { history, source } = get()
-    if (!source) return
+    if (!source || history.present.blocks.length === 0) return
 
     const jobId = crypto.randomUUID()
 
@@ -785,8 +993,44 @@ export const selectDuration = (state: EditorState): number => totalDuration(stat
 export const selectKept = (state: EditorState): number => keptDuration(state.history.present)
 export const selectCanUndo = (state: EditorState): boolean => canUndo(state.history)
 export const selectCanRedo = (state: EditorState): boolean => canRedo(state.history)
-export const selectBlockAtPlayhead = (state: EditorState) =>
+export const selectBlockAtPlayhead = (state: EditorState): Block | null =>
   blockAt(state.history.present, state.playhead)
+
+/**
+ * The block the keyboard and the block menu act on.
+ *
+ * Falls back to whatever sits under the playhead, so pressing Delete right after
+ * scrubbing does the obvious thing instead of nothing at all.
+ */
+export const selectActiveBlock = (state: EditorState): Block | null => {
+  const chosen = state.selectedBlock
+    ? findBlock(state.history.present, state.selectedBlock)
+    : null
+  return chosen ?? blockAt(state.history.present, state.playhead)
+}
+
+/**
+ * Whether the rails are over anything that can actually be taken out.
+ *
+ * False for a selection that covers only a hole, which is what disables the
+ * Remove button rather than letting it record an edit that changes nothing.
+ */
+export const selectSelectionCovers = (state: EditorState): boolean =>
+  state.selection !== null && coveredSpan(state.history.present, state.selection) !== null
+
+/**
+ * Whether there is anything to export.
+ *
+ * An empty timeline is a legitimate state — deleting the last block is how you
+ * start over without closing the file — but it is not a file, so every route to
+ * the export dialog reads this.
+ */
+export const selectCanExport = (state: EditorState): boolean =>
+  state.history.present.blocks.length > 0
+
+/** Whether any medium in the project has reported its cut points yet. */
+export const selectHasCutPoints = (state: EditorState): boolean =>
+  Object.values(state.keyframes).some((positions) => positions.length > 0)
 
 /**
  * The file the preview should be showing, and what it should load for it.

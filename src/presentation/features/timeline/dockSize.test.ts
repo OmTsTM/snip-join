@@ -11,6 +11,7 @@ import {
   MIN_STAGE_HEIGHT,
   maxDockHeight,
   RULER_HEIGHT,
+  SCROLLBAR_HEIGHT,
   TOOLBAR_HEIGHT,
   TRACK_BOTTOM,
   TRACK_GAP,
@@ -112,6 +113,15 @@ describe('the block track always fits inside the canvas', () => {
       )
       expect(canvas - bottom, `wrong bottom margin at dock height ${dock}`).toBe(TRACK_BOTTOM)
     }
+  })
+
+  /**
+   * The horizontal scrollbar is drawn inside the canvas, out of the margin
+   * under the track. Making it taller than that margin is how the bar starts
+   * overlapping the filmstrip at every dock height at once.
+   */
+  it('leaves room for the scrollbar inside that margin', () => {
+    expect(SCROLLBAR_HEIGHT).toBeLessThan(TRACK_BOTTOM)
   })
 
   it('starts at exactly the height the editor was laid out with', () => {

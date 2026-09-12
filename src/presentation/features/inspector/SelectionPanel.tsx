@@ -4,13 +4,18 @@ import { duration as spanDuration } from '@domain/time'
 import { Hole, Join, Scissors } from '@presentation/components/Icons'
 import { Button, cx, Switch } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
-import { selectTimeline, useEditor } from '@presentation/state/editorStore'
+import { selectSelectionCovers, selectTimeline, useEditor } from '@presentation/state/editorStore'
 import { formatTimecode } from '@domain/time'
 
 export function SelectionPanel() {
   const t = useT()
 
   const selection = useEditor((state) => state.selection)
+  // False when the rails sit over nothing but a hole. A hole holds no material,
+  // so a removal there takes nothing out and a lift makes a block out of
+  // nothing: both are refused, and the buttons say so rather than recording an
+  // edit that changes not one frame of the result.
+  const covers = useEditor(selectSelectionCovers)
   const timeline = useEditor(selectTimeline)
   const setMode = useEditor((state) => state.setMode)
   const removeSelection = useEditor((state) => state.removeSelection)
@@ -54,16 +59,29 @@ export function SelectionPanel() {
         </div>
       )}
 
-      {!selection && (
-        <div className="flex gap-2">
-          <Button size="sm" tone="quiet" full onClick={markIn}>
-            {t('selection.setIn')}
-          </Button>
-          <Button size="sm" tone="quiet" full onClick={markOut}>
-            {t('selection.setOut')}
-          </Button>
-        </div>
+      {selection && !covers && (
+        <p className="-mt-2 px-0.5 text-[11px] leading-snug text-faint">
+          {t('selection.onlyHole')}
+        </p>
       )}
+
+      {/*
+        Always here, never only while nothing is marked.
+
+        Marking the start creates a selection, which used to hide these two —
+        so the only way back to "mark the end here" was to click the timeline to
+        move the playhead, and that cleared the start you had just set. The
+        buttons going away were half of that; the timeline click was the other
+        half, and it now keeps a selection it lands inside.
+      */}
+      <div className="flex gap-2">
+        <Button size="sm" tone="quiet" full onClick={markIn}>
+          {t('selection.setIn')}
+        </Button>
+        <Button size="sm" tone="quiet" full onClick={markOut}>
+          {t('selection.setOut')}
+        </Button>
+      </div>
 
       {/*
         The join switch. It sits directly above the two actions it changes the
@@ -93,14 +111,14 @@ export function SelectionPanel() {
           tone="snip"
           size="md"
           full
-          disabled={!selection}
+          disabled={!covers}
           onClick={removeSelection}
           icon={<Scissors size={15} />}
         >
           {t('selection.remove')}
         </Button>
 
-        <Button tone="neutral" size="md" full disabled={!selection} onClick={liftSelection}>
+        <Button tone="neutral" size="md" full disabled={!covers} onClick={liftSelection}>
           {t('selection.lift')}
         </Button>
 

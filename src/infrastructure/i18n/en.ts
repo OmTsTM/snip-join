@@ -54,6 +54,7 @@ export const en = {
   'selection.lift': 'Lift out to move',
   'selection.liftHint': 'Turns the selection into its own block so you can drag it elsewhere.',
   'selection.selectAll': 'Select everything',
+  'selection.onlyHole': 'The rails are over a hole. There is nothing there to take out.',
 
   'join.label': 'Join the ends',
   'join.on': 'What is left closes up into one continuous video.',
@@ -61,15 +62,27 @@ export const en = {
 
   'media.title': 'Media',
   'media.add': 'Add a video',
-  'media.append': 'Put it on the timeline again',
   'media.remove': 'Remove from the project',
   'media.first': 'Sets the format everything else is matched to',
+  'media.still': 'A still image. It lasts as long as you make it.',
+  'media.stillTag': 'Still',
+  'media.hint': 'Click a file to put it at the end. Drag it onto the timeline to place it.',
+  'media.appendTitle': 'Add it to the timeline?',
+  'media.appendBody': '{name} goes on as a new block at the end. You can move it from there.',
+  'media.appendConfirm': 'Add it',
+  'media.appendCancel': 'Not now',
 
   'blocks.title': 'Blocks',
   'blocks.one': '1 block',
   'blocks.many': '{count} blocks',
   'blocks.number': 'Block {number}',
   'blocks.delete': 'Delete this block',
+  'blocks.copy': 'Copy',
+  'blocks.cut': 'Cut',
+  'blocks.paste': 'Paste at the playhead',
+  'blocks.duplicate': 'Duplicate',
+  'blocks.moveEarlier': 'Move earlier',
+  'blocks.moveLater': 'Move later',
   'blocks.split': 'Split at the playhead',
   'blocks.drag': 'Drag to move',
   'blocks.trimStart': 'Trim the start',
@@ -84,6 +97,8 @@ export const en = {
   'timeline.zoomOut': 'Zoom out',
   'timeline.fit': 'Fit to window',
   'timeline.kept': '{kept} of {total} kept',
+  'timeline.length': 'Result {length}',
+  'timeline.empty': 'Nothing on the timeline. Drag a file here from Media, or undo.',
   'timeline.removed': '{removed} removed',
   'timeline.loadingFrames': 'Reading the frames…',
 
@@ -91,6 +106,7 @@ export const en = {
   'history.redo': 'Redo',
 
   'export.open': 'Export',
+  'export.nothing': 'There is nothing on the timeline to export.',
   'export.title': 'Export',
   'export.subtitle': 'Choose how much work to spend on the result.',
   'export.mode': 'Method',
@@ -108,6 +124,7 @@ export const en = {
     'Precise, plus upscaling and restoration. This is the slow one: expect several times the length of the video.',
   'export.mode.forced': 'A hole cannot be copied, so this export re-encodes.',
   'export.mode.forcedByFiles': 'More than one file cannot be copied, so this export re-encodes.',
+  'export.mode.forcedByStill': 'An image has to be drawn for as long as it is shown, so this export re-encodes.',
 
   'export.lossless.exact': 'Exact cuts. Nothing is re-encoded.',
   'export.lossless.shift': 'Cuts move back up to {shift} to reach the nearest cut point.',
@@ -190,6 +207,11 @@ export const en = {
   'shortcuts.zoom': 'Zoom the timeline',
   'shortcuts.export': 'Export',
   'shortcuts.show': 'Keyboard shortcuts',
+  'shortcuts.deleteBlock': 'Delete the chosen block',
+  'shortcuts.copy': 'Copy the block',
+  'shortcuts.cut': 'Cut the block',
+  'shortcuts.paste': 'Paste at the playhead',
+  'shortcuts.reorder': 'Move the block along the order',
 
   'language.label': 'Language',
 

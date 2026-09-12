@@ -13,8 +13,27 @@ export const TOOLBAR_HEIGHT = 40
 export const RULER_HEIGHT = 22
 /** Gap between the ruler and the top of the block track. */
 export const TRACK_GAP = 10
-/** Breathing room under the block track. */
+/**
+ * Breathing room under the block track.
+ *
+ * It is also where the timeline's horizontal scrollbar is drawn. The scrolling
+ * element's own box is the canvas, so the bar is taken out of the bottom of it
+ * rather than added below: a bar taller than this margin would overlap the
+ * strip. `SCROLLBAR_HEIGHT` has to stay under it, which `dockSize.test.ts`
+ * asserts.
+ */
 export const TRACK_BOTTOM = 16
+
+/**
+ * Height of the timeline's own horizontal scrollbar, matching `.timeline-scroll`
+ * in `app.css`.
+ *
+ * Declared here because this module owns every vertical size in the dock, and
+ * because the one thing that can go wrong with it — growing past the margin
+ * underneath the track — is a fact about the layout rather than about the
+ * stylesheet.
+ */
+export const SCROLLBAR_HEIGHT = 12
 
 /** Shortest a block may be: the handle plus a readable strip of picture. */
 export const MIN_BLOCK_HEIGHT = 70

@@ -6,9 +6,11 @@ import { cx } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
 
 /**
- * The only outbound address the application ever asks for. The capability in
- * `src-tauri/capabilities/default.json` is scoped to exactly this URL, so the
- * renderer cannot be talked into opening anything else.
+ * The only outbound address the application ever asks for. Both capability
+ * files — `default.json` for the editor and `splash.json` for the splash — are
+ * scoped to exactly this URL, so neither window can be talked into opening
+ * anything else. The splash's credit line opens the same address and has to
+ * stay in step with this one.
  */
 const AUTHOR_URL = 'https://ko-fi.com/omtstm'
 

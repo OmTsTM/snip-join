@@ -57,8 +57,18 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
 
   const hasGaps = !isContiguous(timeline)
   const spansMedia = spansMultipleMedia(timeline)
-  const copyImpossible = hasGaps || spansMedia
-  const copyPossible = canCopyStreams(spec, hasGaps, spansMedia)
+  // A still is one packet looped into a stretch of video, which no stream copy
+  // can do. Said here rather than discovered when the title card turns out to
+  // last a single frame.
+  const usesStill = useEditor((state) =>
+    state.media.some(
+      (medium) =>
+        medium.kind === 'still' &&
+        state.history.present.blocks.some((block) => block.mediaId === medium.path),
+    ),
+  )
+  const copyImpossible = hasGaps || spansMedia || usesStill
+  const copyPossible = canCopyStreams(spec, hasGaps, spansMedia, usesStill)
 
   // Ask the backend where to put the result the first time the dialog opens for
   // a given file, rather than guessing a path in the renderer.
@@ -192,7 +202,11 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
                     </div>
                     {copyImpossible ? (
                       <p className="mt-2 text-[11.5px] leading-snug text-dusk-lift">
-                        {hasGaps ? t('export.mode.forced') : t('export.mode.forcedByFiles')}
+                        {hasGaps
+                          ? t('export.mode.forced')
+                          : spansMedia
+                            ? t('export.mode.forcedByFiles')
+                            : t('export.mode.forcedByStill')}
                       </p>
                     ) : (
                       spec.mode === 'fast' && <LosslessNote />
@@ -445,15 +459,20 @@ const LEVELS: readonly RestorationLevel[] = ['off', 'light', 'medium', 'strong']
 function LosslessNote() {
   const t = useT()
   const blocks = useEditor((state) => state.history.present.blocks)
-  const keyframes = useEditor((state) => state.keyframes)
-  const truncated = useEditor((state) => state.keyframesTruncated)
+  // Only ever rendered for a copy, which rules out a timeline drawing on more
+  // than one file, so every block here reads from the first medium and its list
+  // is the only one that could apply.
+  const keyframes = useEditor((state) => state.keyframes[state.source?.path ?? ''])
+  const truncated = useEditor(
+    (state) => state.keyframesTruncated[state.source?.path ?? ''] ?? false,
+  )
   const sourceDuration = useEditor((state) => state.source?.duration ?? 0)
   const hasVideo = useEditor((state) => state.source?.video != null)
 
   // Derived here rather than in a selector: the result is a fresh object, and a
   // selector returning one would re-render without end.
   const accuracy = useMemo(
-    () => losslessAccuracy(blocks, keyframes, sourceDuration),
+    () => losslessAccuracy(blocks, keyframes ?? [], sourceDuration),
     [blocks, keyframes, sourceDuration],
   )
 
@@ -468,7 +487,7 @@ function LosslessNote() {
     )
   }
 
-  if (keyframes.length === 0) {
+  if (!keyframes || keyframes.length === 0) {
     return <p className="mt-2 text-[11.5px] text-faint">{t('export.lossless.reading')}</p>
   }
 

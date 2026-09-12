@@ -26,6 +26,8 @@ function info(path: string, duration: number): MediaSourceInfo {
     sizeBytes: 1_000_000,
     container: 'mp4',
     duration,
+    maxDuration: duration,
+    kind: 'motion',
     video: {
       index: 0,
       codec: 'h264',
