@@ -173,11 +173,18 @@ export function TimelineDock() {
    * the scroll it causes — the block card listens for it, and the media drop
    * target is recomputed on the next frame here.
    */
-  // Any of them: a block being carried, a file out of the pool, an edge being
-  // trimmed, a rail being dragged. All four can reach the side of the window
-  // with more timeline to go.
+  /**
+   * Whether the view should be following the pointer right now.
+   *
+   * A block being carried always counts, switch or no switch: the block has to
+   * reach where it is going, and running out of window in the middle of placing
+   * it leaves the user with no way to finish the gesture at all. The switch
+   * governs the rest — trimming an edge, dragging a rail, carrying a file out of
+   * the pool — where the view moving on its own is a convenience rather than the
+   * difference between possible and impossible.
+   */
   const following = useDragScroll(selectFollowing)
-  const carryingAnything = edgeScroll && (draggingBlock !== null || carrying || following)
+  const carryingAnything = draggingBlock !== null || (edgeScroll && (carrying || following))
   useEffect(() => {
     if (!carryingAnything) return
 

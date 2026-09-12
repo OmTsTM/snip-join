@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 import { duration as spanDuration, formatTimecode } from '@domain/time'
 import { blockEnd } from '@domain/timeline'
@@ -32,48 +32,58 @@ export function BlockList() {
   const count = timeline.blocks.length
 
   /**
-   * Brings the chosen block into view.
+   * Brings the whole panel into view, with the chosen row inside it.
    *
-   * The list is the only place the source range of each piece is written down,
-   * and on an ordinary window most of it is below the fold — so choosing a block
-   * on the timeline told you nothing unless you went looking. `nearest` rather
-   * than `center`: a row already on screen should not make the list jump.
+   * The list is the only place each piece's source range is written down, and on
+   * an ordinary window it is below the fold — so choosing a block on the
+   * timeline told you nothing unless you went looking. Scrolling the row just
+   * far enough was not enough either: it arrived alone at the bottom edge with
+   * its heading and its neighbours still out of sight, which is not "showing you
+   * the blocks". The panel is framed instead, and the row nudged into view
+   * within it only if the panel is too tall to fit.
    */
+  const panel = useRef<HTMLElement>(null)
   useEffect(() => {
-    // Found in the document rather than through a ref: these rows are motion
+    if (!selectedBlock) return
+
+    // Found in the document rather than through a ref: the rows are motion
     // components, and a ref handed to one does not reliably reach the node it
     // renders.
-    const row = selectedBlock
-      ? document.querySelector<HTMLElement>(`[data-block-row="${selectedBlock}"]`)
-      : null
-    if (!row) return
+    const row = document.querySelector<HTMLElement>(`[data-block-row="${selectedBlock}"]`)
+    const section = panel.current
+    if (!row || !section) return
 
-    // The column is found and scrolled by hand rather than left to
-    // `scrollIntoView`. The row sits in a list of its own that usually does not
-    // overflow, and asking the browser to walk two ancestors out to the column
-    // moved nothing at all — which is the only case that matters, because the
-    // list is normally entirely below the fold.
-    let scroller = row.parentElement
+    // The column, found by hand: `scrollIntoView` walks out to the row's own
+    // list, which usually does not overflow, and stops there having moved
+    // nothing at all.
+    let scroller = section.parentElement
     while (scroller && scroller.scrollHeight <= scroller.clientHeight) {
       scroller = scroller.parentElement
     }
     if (!scroller) return
 
-    const rowBox = row.getBoundingClientRect()
     const box = scroller.getBoundingClientRect()
-    if (rowBox.top >= box.top && rowBox.bottom <= box.bottom) return
+    const sectionBox = section.getBoundingClientRect()
 
-    // A row's height of margin, so the chosen one never sits flush against the
-    // edge it was scrolled to and its neighbours stay readable.
-    const margin = rowBox.height
-    scroller.scrollTop +=
-      rowBox.top < box.top
-        ? rowBox.top - box.top - margin
-        : rowBox.bottom - box.bottom + margin
+    // A gap above, so the panel arrives with its heading clear of the edge
+    // rather than flush against it.
+    const gap = 12
+    if (sectionBox.top < box.top + gap || sectionBox.bottom > box.bottom) {
+      scroller.scrollTop += Math.min(
+        sectionBox.top - box.top - gap,
+        Math.max(0, sectionBox.bottom - box.bottom + gap),
+      )
+    }
+
+    // Only now, and only if the panel could not fit whole.
+    const rowBox = row.getBoundingClientRect()
+    const after = scroller.getBoundingClientRect()
+    if (rowBox.top < after.top) scroller.scrollTop += rowBox.top - after.top - gap
+    else if (rowBox.bottom > after.bottom) scroller.scrollTop += rowBox.bottom - after.bottom + gap
   }, [selectedBlock])
 
   return (
-    <section className="panel flex shrink-0 flex-col">
+    <section ref={panel} className="panel flex shrink-0 flex-col">
       <header className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4">
         <h2 className="eyebrow">{t('blocks.title')}</h2>
         <span className="text-[11px] text-faint">
