@@ -163,6 +163,14 @@ export const Check = (props: IconProps) => (
   </Icon>
 )
 
+/** Leaving the application. Only the credit line uses it. */
+export const ArrowOut = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M7.5 16.5 16.5 7.5" />
+    <path d="M9 7.5h7.5V15" />
+  </Icon>
+)
+
 /** Sound on. The cone and two arcs, at the same stroke weight as the rest. */
 export const Speaker = (props: IconProps) => (
   <Icon {...props}>

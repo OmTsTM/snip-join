@@ -30,6 +30,8 @@
 
   --color-dusk: #1b406b;
   --color-dusk-lift: #5b87bc;
+  /* The lift, brightened. Used where dusk has to answer a pointer. */
+  --color-dusk-bright: #7fa8d8;
 
   --color-paper: #f4e6d6;
   --color-muted: #8d9299;
