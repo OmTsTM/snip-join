@@ -21,6 +21,7 @@ import { fitScale, pixelsToTime, timeToPixels, TIMELINE_PADDING, zoomAround } fr
 import { Playhead } from './Playhead'
 import { Ruler, RULER_HEIGHT } from './Ruler'
 import { SelectionRails } from './SelectionRails'
+import { StripLoading } from './StripLoading'
 
 /** Vertical offset of the block track inside the canvas. */
 const TRACK_TOP = RULER_HEIGHT + TRACK_GAP
@@ -43,6 +44,11 @@ export function TimelineDock() {
   const thumbnails = useEditor((state) => state.thumbnails)
   const keyframes = useEditor((state) => state.keyframes)
   const snapToCutPoint = useEditor((state) => state.snapToCutPoint)
+  const phase = useEditor((state) => state.phase)
+  const framesPending = useEditor((state) => state.framesPending)
+  // Covered from the moment a file is being prepared until the last frame has
+  // landed, which is the whole stretch where the strip is visibly changing.
+  const stripLoading = phase !== 'empty' && (phase !== 'ready' || framesPending)
   const snapToCutPoints = useEditor((state) => state.snapToCutPoints)
   const setSnapToCutPoints = useEditor((state) => state.setSnapToCutPoints)
   const dockHeight = useEditor((state) => state.timelineHeight)
@@ -303,6 +309,8 @@ export function TimelineDock() {
                 onDragStateChange={setDraggingBlock}
               />
             ))}
+
+            <StripLoading visible={stripLoading} />
           </div>
 
           <CutPoints

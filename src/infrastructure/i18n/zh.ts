@@ -73,6 +73,7 @@ export const zh: Catalogue = {
   'timeline.fit': '适应窗口',
   'timeline.kept': '保留 {kept}，共 {total}',
   'timeline.removed': '已移除 {removed}',
+  'timeline.loadingFrames': '正在读取画面…',
 
   'history.undo': '撤销',
   'history.redo': '重做',

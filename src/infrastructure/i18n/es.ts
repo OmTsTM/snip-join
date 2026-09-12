@@ -76,6 +76,7 @@ export const es: Catalogue = {
   'timeline.fit': 'Ajustar a la ventana',
   'timeline.kept': '{kept} de {total} conservados',
   'timeline.removed': '{removed} quitados',
+  'timeline.loadingFrames': 'Leyendo los fotogramas…',
 
   'history.undo': 'Deshacer',
   'history.redo': 'Rehacer',

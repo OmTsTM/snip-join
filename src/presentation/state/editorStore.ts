@@ -85,6 +85,14 @@ interface EditorState {
   /** Timeline scale, in pixels per second. */
   pixelsPerSecond: number
   thumbnails: readonly Thumbnail[]
+  /**
+   * Whether frames are still arriving.
+   *
+   * Taken from the command settling rather than from a count: a frame that
+   * cannot be decoded is skipped, so the strip can legitimately end up shorter
+   * than what was asked for, and a count would leave the veil up forever.
+   */
+  framesPending: boolean
 
   /**
    * Positions a stream copy can cut at.
@@ -255,6 +263,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   muted: readStoredMuted(),
   pixelsPerSecond: 40,
   thumbnails: [],
+  framesPending: false,
   keyframes: [],
   keyframesTruncated: false,
   snapToCutPoints: true,
@@ -267,7 +276,14 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   async openFile(path) {
     const token = crypto.randomUUID()
-    set({ phase: 'opening', error: null, thumbnails: [], lastExport: null, mediaToken: token })
+    set({
+      phase: 'opening',
+      error: null,
+      thumbnails: [],
+      framesPending: true,
+      lastExport: null,
+      mediaToken: token,
+    })
 
     try {
       const source = await api.openMedia(path)
@@ -303,8 +319,16 @@ export const useEditor = create<EditorState>((set, get) => ({
       })
 
       // The filmstrip fills in progressively through events, so this is not
-      // awaited: the editor is usable the moment the preview is ready.
-      void api.generateThumbnails(THUMBNAIL_COUNT, token).catch(() => undefined)
+      // awaited: the editor is usable the moment the preview is ready. What is
+      // tracked is when the last frame has landed, so the strip can say it is
+      // still filling instead of just flickering.
+      void api
+        .generateThumbnails(THUMBNAIL_COUNT, token)
+        .catch(() => undefined)
+        .finally(() => {
+          if (get().mediaToken !== token) return
+          set({ framesPending: false })
+        })
 
       // Cut points decide whether a copy is exact, so they are read as soon as
       // the editor is usable. Not awaited: the timeline works without them and
@@ -318,7 +342,7 @@ export const useEditor = create<EditorState>((set, get) => ({
         .catch(() => undefined)
     } catch (error) {
       if (get().mediaToken !== token) return
-      set({ phase: 'empty', source: null, previewUrl: null })
+      set({ phase: 'empty', source: null, previewUrl: null, framesPending: false })
       get().reportError(error)
     }
   },
@@ -336,6 +360,7 @@ export const useEditor = create<EditorState>((set, get) => ({
       playhead: 0,
       playing: false,
       thumbnails: [],
+      framesPending: false,
       keyframes: [],
       keyframesTruncated: false,
       exportJob: null,

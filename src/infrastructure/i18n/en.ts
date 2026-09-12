@@ -79,6 +79,7 @@ export const en = {
   'timeline.fit': 'Fit to window',
   'timeline.kept': '{kept} of {total} kept',
   'timeline.removed': '{removed} removed',
+  'timeline.loadingFrames': 'Reading the frames…',
 
   'history.undo': 'Undo',
   'history.redo': 'Redo',

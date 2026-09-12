@@ -185,6 +185,39 @@
     transform: scale(1.18);
   }
 
+  /*
+   * The filmstrip while its frames are still arriving.
+   *
+   * Movement rather than a percentage: frames are reported as they land and a
+   * damaged one is skipped, so there is no honest total to count towards. The
+   * veil is thin enough to edit through, and does not take the pointer.
+   */
+  .strip-loading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 18%,
+      rgba(244, 230, 214, 0.07) 50%,
+      transparent 82%
+    );
+    transform: translateX(-100%);
+    animation: strip-sweep 1.6s linear infinite;
+  }
+
+  @keyframes strip-sweep {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .strip-loading::after {
+      animation: none;
+    }
+  }
+
   .panel {
     background: var(--color-panel);
     border: 1px solid var(--color-line);

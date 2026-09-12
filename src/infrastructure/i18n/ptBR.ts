@@ -76,6 +76,7 @@ export const ptBR: Catalogue = {
   'timeline.fit': 'Ajustar à janela',
   'timeline.kept': '{kept} de {total} mantidos',
   'timeline.removed': '{removed} removidos',
+  'timeline.loadingFrames': 'Lendo os quadros…',
 
   'history.undo': 'Desfazer',
   'history.redo': 'Refazer',
