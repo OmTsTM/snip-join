@@ -25,6 +25,18 @@ pub fn is_portable() -> bool {
     root().is_some()
 }
 
+/// The folder a portable copy *runs from*, which is not where it writes.
+///
+/// `root` answers "where does this copy keep its files", and that is the `data`
+/// directory inside the folder — so it is the wrong answer to "which folder does
+/// an update replace". Two questions, two functions, because the difference
+/// between them is one update that swaps the program and one that pours a new
+/// program into the cache directory.
+pub fn folder() -> Option<PathBuf> {
+    root()?;
+    std::env::current_exe().ok()?.parent().map(Path::to_path_buf)
+}
+
 fn detect() -> Option<PathBuf> {
     let exe_dir = std::env::current_exe().ok()?.parent().map(Path::to_path_buf)?;
 

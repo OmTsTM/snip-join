@@ -32,8 +32,36 @@ pub const KEPT: &str = "data";
 /// new one takes its place. The next start sweeps it.
 pub const OLD_SUFFIX: &str = ".old";
 
-/// The executable, in both folders.
-pub const EXECUTABLE: &str = "snipjoin.exe";
+/// Finds the program in a portable copy's folder.
+///
+/// Looked for rather than named. The packer decides what the executable is
+/// called — today `SnipJoin.exe`, which is not what Cargo produced — and a
+/// constant here would be a second place that has to agree with it, quietly, in
+/// the one piece of code that replaces the application. Windows would forgive a
+/// mismatched case; a volume with case sensitivity switched on would not, and
+/// neither would a rename.
+///
+/// There is exactly one program at the top of that folder: FFmpeg lives in
+/// `bin/`, and an outgoing executable ends in `.old`.
+pub fn executable_in(folder: &Path) -> Option<PathBuf> {
+    let mut found = None;
+
+    for entry in std::fs::read_dir(folder).ok()?.flatten() {
+        if !entry.file_type().ok()?.is_file() {
+            continue;
+        }
+        let path = entry.path();
+        if path.extension().is_some_and(|end| end.eq_ignore_ascii_case("exe")) {
+            // Two would mean this is not the folder anyone thought it was.
+            if found.is_some() {
+                return None;
+            }
+            found = Some(path);
+        }
+    }
+
+    found
+}
 
 /// How long the finisher keeps trying before giving up.
 ///
@@ -104,7 +132,7 @@ fn payload_root(extracted: &Path) -> AppResult<PathBuf> {
         _ => return Err(AppError::InvalidInput("that archive is not a Snip Join copy".into())),
     };
 
-    if !root.join(EXECUTABLE).is_file() {
+    if executable_in(&root).is_none() {
         return Err(AppError::InvalidInput("that archive holds no Snip Join".into()));
     }
 
@@ -118,18 +146,21 @@ fn payload_root(extracted: &Path) -> AppResult<PathBuf> {
 /// because a failure after that point still leaves a runnable copy under the old
 /// name for someone to rescue by hand.
 pub fn swap(payload: &Path, install: &Path) -> AppResult<()> {
-    if !install.join(EXECUTABLE).is_file() {
-        return Err(AppError::InvalidInput("that is not a Snip Join folder".into()));
-    }
+    let running = executable_in(install)
+        .ok_or_else(|| AppError::InvalidInput("that is not a Snip Join folder".into()))?;
 
-    let running = install.join(EXECUTABLE);
-    let stepped_aside = install.join(format!("{EXECUTABLE}{OLD_SUFFIX}"));
+    let stepped_aside = outgoing(install);
     let _ = std::fs::remove_file(&stepped_aside);
     std::fs::rename(&running, &stepped_aside).map_err(|error| {
         AppError::Internal(format!("the old copy would not step aside: {error}"))
     })?;
 
     copy_over(payload, install)
+}
+
+/// Where the outgoing executable waits until the process using it has ended.
+fn outgoing(install: &Path) -> PathBuf {
+    install.join(format!("program{OLD_SUFFIX}"))
 }
 
 fn copy_over(from: &Path, to: &Path) -> AppResult<()> {
@@ -205,12 +236,15 @@ pub fn finish(payload: &Path, install: &Path) -> AppResult<()> {
       exited can, so this asks the only question that matters and tidies up by
       asking it.
     */
-    let outgoing = install.join(format!("{EXECUTABLE}{OLD_SUFFIX}"));
+    let outgoing = outgoing(install);
     while std::fs::remove_file(&outgoing).is_err() && std::time::Instant::now() < deadline {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
-    std::process::Command::new(install.join(EXECUTABLE))
+    let installed = executable_in(install)
+        .ok_or_else(|| AppError::Internal("the new copy is not where it was put".into()))?;
+
+    std::process::Command::new(installed)
         .current_dir(install)
         .spawn()
         .map_err(|error| AppError::Internal(format!("the new copy would not start: {error}")))?;
@@ -237,7 +271,7 @@ const STAGING_PREFIX: &str = "snipjoin-update-";
 /// be exiting, and a file it still holds is one this start simply leaves for the
 /// next.
 pub fn sweep(install: &Path) {
-    let _ = std::fs::remove_file(install.join(format!("{EXECUTABLE}{OLD_SUFFIX}")));
+    let _ = std::fs::remove_file(outgoing(install));
 
     let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return };
     for entry in entries.flatten() {
@@ -273,7 +307,9 @@ mod tests {
         let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
 
         for (name, contents) in [
-            ("Snip Join/snipjoin.exe", version),
+            // The name the packer really writes, which is not the one Cargo
+            // produced — the reason nothing here hard-codes it.
+            ("Snip Join/SnipJoin.exe", version),
             ("Snip Join/portable.txt", "portable"),
             ("Snip Join/bin/ffmpeg.exe", version),
         ] {
@@ -293,7 +329,7 @@ mod tests {
         let payload = extract(&zip, &root.join("staging")).unwrap();
 
         assert_eq!(payload.file_name().unwrap(), "Snip Join");
-        assert!(payload.join(EXECUTABLE).is_file());
+        assert_eq!(executable_in(&payload).unwrap().file_name().unwrap(), "SnipJoin.exe");
         assert!(payload.join("bin/ffmpeg.exe").is_file());
     }
 
@@ -301,7 +337,7 @@ mod tests {
     fn the_swap_replaces_the_program_and_keeps_what_is_the_users() {
         let root = scratch("swap");
         let install = root.join("Snip Join");
-        write(&install.join(EXECUTABLE), "old");
+        write(&install.join("SnipJoin.exe"), "old");
         write(&install.join("bin").join("ffmpeg.exe"), "old");
         write(&install.join(KEPT).join("settings.json"), "the user's");
 
@@ -311,7 +347,7 @@ mod tests {
 
         swap(&payload, &install).unwrap();
 
-        assert_eq!(std::fs::read_to_string(install.join(EXECUTABLE)).unwrap(), "new");
+        assert_eq!(std::fs::read_to_string(install.join("SnipJoin.exe")).unwrap(), "new");
         assert_eq!(std::fs::read_to_string(install.join("bin/ffmpeg.exe")).unwrap(), "new");
         assert_eq!(
             std::fs::read_to_string(install.join(KEPT).join("settings.json")).unwrap(),
@@ -319,18 +355,21 @@ mod tests {
             "the portable copy's own storage is not part of the release"
         );
 
-        // The outgoing executable is kept until the next start, which is what
-        // lets the swap happen while the old one is still running.
-        assert!(install.join(format!("{EXECUTABLE}{OLD_SUFFIX}")).is_file());
+        // The outgoing executable is kept until the process using it ends,
+        // which is what lets the swap happen while the old one is still
+        // running. It does not end in `.exe`, so it cannot be mistaken for the
+        // program next time either.
+        assert!(outgoing(&install).is_file());
+        assert!(executable_in(&install).unwrap().file_name().unwrap() == "SnipJoin.exe");
         sweep(&install);
-        assert!(!install.join(format!("{EXECUTABLE}{OLD_SUFFIX}")).is_file());
+        assert!(!outgoing(&install).is_file());
     }
 
     #[test]
     fn a_folder_that_is_not_snip_join_is_refused() {
         let root = scratch("refuse");
         let payload = root.join("payload");
-        write(&payload.join(EXECUTABLE), "new");
+        write(&payload.join("SnipJoin.exe"), "new");
 
         let empty = root.join("somewhere else");
         std::fs::create_dir_all(&empty).unwrap();

@@ -59,8 +59,8 @@ pub fn run() {
     infrastructure::paths::sweep_stale_scratch();
 
     // And, if this start is the first after an update, the copy it replaced.
-    if let Some(root) = infrastructure::portable::root() {
-        application::portable_update::sweep(root);
+    if let Some(folder) = infrastructure::portable::folder() {
+        application::portable_update::sweep(&folder);
     }
 
     // Windows passes a file here when the application is picked from "Open with"

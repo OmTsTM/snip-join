@@ -543,8 +543,7 @@ pub async fn apply_update(app: AppHandle, path: String, version: String) -> AppR
 
     match install_kind() {
         update::InstallKind::Portable => {
-            let install = portable::root()
-                .cloned()
+            let install = portable::folder()
                 .ok_or_else(|| AppError::Internal("this copy has no folder of its own".into()))?;
 
             // Unpacked and checked before anything is touched: an archive that
@@ -558,7 +557,9 @@ pub async fn apply_update(app: AppHandle, path: String, version: String) -> AppR
             // folder about to be replaced — it cannot be inside it, since that
             // is the folder it is going to overwrite.
             let finisher = staging.join("finish-update.exe");
-            std::fs::copy(payload.join(portable_update::EXECUTABLE), &finisher)?;
+            let program = portable_update::executable_in(&payload)
+                .ok_or_else(|| AppError::InvalidInput("that archive holds no Snip Join".into()))?;
+            std::fs::copy(program, &finisher)?;
 
             std::process::Command::new(&finisher)
                 .arg("--finish-update")
