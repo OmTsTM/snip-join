@@ -370,7 +370,13 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
                       >
                         {destination || '—'}
                       </div>
-                      <Button size="sm" tone="neutral" onClick={() => void chooseDestination()} icon={<Folder size={14} />}>
+                      <Button
+                        size="sm"
+                        tone="neutral"
+                        title={t('hint.destination')}
+                        onClick={() => void chooseDestination()}
+                        icon={<Folder size={14} />}
+                      >
                         {t('export.chooseDestination')}
                       </Button>
                     </div>
@@ -408,7 +414,13 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
                         <span className="timecode text-muted">{Math.round(job.progress * 100)}%</span>
                       </div>
                       <ProgressBar value={job.progress} />
-                      <Button tone="quiet" size="sm" full onClick={() => void cancelExport()}>
+                      <Button
+                        tone="quiet"
+                        size="sm"
+                        full
+                        title={t('hint.cancelExport')}
+                        onClick={() => void cancelExport()}
+                      >
                         {t('export.cancel')}
                       </Button>
                     </div>
@@ -430,6 +442,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
                         size="lg"
                         onClick={start}
                         disabled={!destination}
+                        title={t('hint.startExport')}
                         icon={<ExportIcon size={16} />}
                       >
                         {t('export.start')}
@@ -573,12 +586,13 @@ function Completed({ onClose }: { readonly onClose: () => void }) {
         <Button
           tone="neutral"
           size="md"
+          title={t('hint.reveal')}
           onClick={() => void revealItemInDir(outcome.outputPath).catch(() => undefined)}
           icon={<Folder size={15} />}
         >
           {t('export.reveal')}
         </Button>
-        <Button tone="paper" size="md" onClick={onClose}>
+        <Button tone="paper" size="md" title={t('hint.dismissExport')} onClick={onClose}>
           {t('export.dismiss')}
         </Button>
       </div>

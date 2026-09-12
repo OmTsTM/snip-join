@@ -75,14 +75,14 @@ export function UnsavedDialog({ open, onSave, onDiscard, onCancel }: UnsavedDial
             </div>
 
             <div className="flex items-center gap-2 border-t border-line px-5 py-3">
-              <Button size="sm" tone="danger" onClick={onDiscard}>
+              <Button size="sm" tone="danger" title={t('hint.discard')} onClick={onDiscard}>
                 {t('project.discard')}
               </Button>
               <div className="flex-1" />
-              <Button size="sm" tone="quiet" onClick={onCancel}>
+              <Button size="sm" tone="quiet" title={t('hint.keepEditing')} onClick={onCancel}>
                 {t('project.keepEditing')}
               </Button>
-              <Button size="sm" tone="paper" onClick={onSave}>
+              <Button size="sm" tone="paper" title={t('hint.saveProject')} onClick={onSave}>
                 {t('project.save')}
               </Button>
             </div>

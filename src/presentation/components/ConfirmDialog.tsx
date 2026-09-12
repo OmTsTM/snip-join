@@ -84,10 +84,10 @@ export function ConfirmDialog({
             </div>
 
             <div className="flex gap-2 border-t border-line px-5 py-3">
-              <Button size="sm" tone="quiet" full onClick={onCancel}>
+              <Button size="sm" tone="quiet" full title={cancelLabel} onClick={onCancel}>
                 {cancelLabel}
               </Button>
-              <Button size="sm" tone="paper" full onClick={onConfirm}>
+              <Button size="sm" tone="paper" full title={confirmLabel} onClick={onConfirm}>
                 {confirmLabel}
               </Button>
             </div>

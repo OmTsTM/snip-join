@@ -204,6 +204,7 @@ function LanguagePicker({
           <button
             key={locale}
             type="button"
+            title={label}
             onClick={() => onPick(locale)}
             className={cx(
               'block w-full rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors duration-150',
@@ -247,6 +248,7 @@ function SkinPicker({
           <button
             key={skin}
             type="button"
+            title={label}
             onClick={() => onPick(skin)}
             className={cx(
               'block w-full rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors duration-150',

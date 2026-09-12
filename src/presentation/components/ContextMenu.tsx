@@ -139,7 +139,8 @@ export function ContextMenu({ at, entries, onClose }: ContextMenuProps) {
             type="button"
             role="menuitem"
             disabled={entry.disabled}
-            onClick={() => {
+            title={entry.shortcut ? `${entry.label} · ${entry.shortcut}` : entry.label}
+          onClick={() => {
               entry.onSelect()
               onClose()
             }}

@@ -306,6 +306,7 @@ function Actions({
           // A machine with no browser association is not worth an error toast
           // over a link nobody has to press.
           onClick={() => void openUrl(RELEASES_URL).catch(() => {})}
+          title={t('hint.updateNotes')}
           className="text-[12px] text-muted underline decoration-line-bright underline-offset-2 transition-colors duration-150 hover:text-paper"
         >
           {t('update.notes')}
@@ -314,18 +315,23 @@ function Actions({
 
       <div className="flex-1" />
 
-      <Button size="sm" tone="quiet" onClick={onClose}>
+      <Button size="sm" tone="quiet" title={t('hint.updateClose')} onClick={onClose}>
         {t('update.close')}
       </Button>
 
       {stage.kind === 'report' && stage.report.newer && (
-        <Button size="sm" tone="paper" onClick={() => onDownload(stage.report, stage.report.newer!)}>
+        <Button
+          size="sm"
+          tone="paper"
+          title={t('hint.updateDownload')}
+          onClick={() => onDownload(stage.report, stage.report.newer!)}
+        >
           {t('update.download', { size: formatBytes(stage.report.newer.assetSize) })}
         </Button>
       )}
 
       {stage.kind === 'downloading' && (
-        <Button size="sm" tone="paper" disabled>
+        <Button size="sm" tone="paper" title={t('hint.updateWait')} disabled>
           {t('update.downloading')}
         </Button>
       )}
@@ -334,6 +340,11 @@ function Actions({
         <Button
           size="sm"
           tone="paper"
+          title={
+            stage.report.kind === 'portable'
+              ? t('update.portableNote')
+              : t('update.installNote')
+          }
           onClick={() => onApply(stage.path, stage.release.version)}
         >
           {t('update.install')}

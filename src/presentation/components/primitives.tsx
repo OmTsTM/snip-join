@@ -122,6 +122,9 @@ export function Switch({ checked, onChange, label, description, disabled }: Swit
         id={id}
         aria-checked={checked}
         disabled={disabled}
+        // The description says what this state means, which is the thing worth
+        // reading while the pointer is on the switch rather than on the label.
+        title={description ? `${label} — ${description}` : label}
         onClick={() => onChange(!checked)}
         className={cx(
           'relative mt-0.5 h-[22px] w-[38px] shrink-0 rounded-full border transition-colors duration-200',
@@ -229,6 +232,7 @@ export function Checkbox({ checked, onChange, label, note }: CheckboxProps) {
       type="button"
       role="checkbox"
       aria-checked={checked}
+      title={note ? `${label} — ${note}` : label}
       onClick={() => onChange(!checked)}
       className="flex w-full items-start gap-2.5 text-left"
     >

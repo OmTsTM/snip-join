@@ -40,6 +40,7 @@ export function Welcome({ dropActive }: { readonly dropActive: boolean }) {
           className="mt-8"
           onClick={() => void choose()}
           disabled={opening}
+          title={t('hint.chooseVideo')}
           icon={<Folder size={17} />}
         >
           {opening ? t('welcome.opening') : t('welcome.choose')}

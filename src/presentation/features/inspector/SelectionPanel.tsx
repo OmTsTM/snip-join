@@ -34,6 +34,7 @@ export function SelectionPanel() {
           <button
             type="button"
             onClick={() => setSelection(null)}
+            title={t('hint.clearSelection')}
             className="text-[11px] text-faint transition-colors duration-150 hover:text-paper"
           >
             {t('selection.clear')}
@@ -81,10 +82,24 @@ export function SelectionPanel() {
         side is not something to have to guess is clickable.
       */}
       <div className="flex gap-2">
-        <Button size="sm" tone="neutral" full icon={<MarkStart size={14} />} onClick={markIn}>
+        <Button
+          size="sm"
+          tone="neutral"
+          full
+          icon={<MarkStart size={14} />}
+          title={t('hint.markIn')}
+          onClick={markIn}
+        >
           {t('selection.setIn')}
         </Button>
-        <Button size="sm" tone="neutral" full icon={<MarkEnd size={14} />} onClick={markOut}>
+        <Button
+          size="sm"
+          tone="neutral"
+          full
+          icon={<MarkEnd size={14} />}
+          title={t('hint.markOut')}
+          onClick={markOut}
+        >
           {t('selection.setOut')}
         </Button>
       </div>
@@ -119,12 +134,20 @@ export function SelectionPanel() {
           full
           disabled={!covers}
           onClick={removeSelection}
+          title={t('hint.remove')}
           icon={<Scissors size={15} />}
         >
           {t('selection.remove')}
         </Button>
 
-        <Button tone="neutral" size="md" full disabled={!covers} onClick={liftSelection}>
+        <Button
+          tone="neutral"
+          size="md"
+          full
+          disabled={!covers}
+          title={t('selection.liftHint')}
+          onClick={liftSelection}
+        >
           {t('selection.lift')}
         </Button>
 
