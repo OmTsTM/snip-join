@@ -101,20 +101,53 @@ export function App() {
    * turns that into one click instead of a relaunch and a splash screen.
    */
   const leaveProject = useCallback(() => {
-    setAskingToSave(false)
     setExportOpen(false)
     void useEditor.getState().closeFile()
+  }, [])
+
+  /**
+   * Asks about unsaved work, and answers whether it is all right to go ahead.
+   *
+   * One question with two callers, which is the whole reason it is shaped like
+   * this: the window closing, and an update about to replace the application
+   * underneath it. Both are moments where the state in this window stops
+   * existing, and only one of them used to ask — installing an update took the
+   * process down with `exit`, which fires no close event and so asked nothing.
+   *
+   * The answer arrives from a dialog, so it is a promise: the resolver is held
+   * until one of the three buttons is pressed.
+   */
+  const answer = useRef<((proceed: boolean) => void) | null>(null)
+
+  const askAboutUnsavedWork = useCallback((): Promise<boolean> => {
+    const { media, history, savedMark } = useEditor.getState()
+
+    const unsaved =
+      media.length > 0 &&
+      (!savedMark || savedMark.timeline !== history.present || savedMark.media !== media)
+    if (!unsaved) return Promise.resolve(true)
+
+    setAskingToSave(true)
+    return new Promise<boolean>((resolve) => {
+      answer.current = resolve
+    })
+  }, [])
+
+  const settle = useCallback((proceed: boolean) => {
+    setAskingToSave(false)
+    answer.current?.(proceed)
+    answer.current = null
   }, [])
 
   /**
    * Stands between unsaved work and the editor being put down.
    *
    * Tauri asks before it closes, which is the only chance there is: the state
-   * lives in this window either way. The answer comes back asynchronously from a
-   * dialog, so the close is always refused while a project is open and the
-   * departure is made afterwards by hand. With nothing open the request is left
-   * alone and the application really does quit — the welcome screen holds no
-   * work, so there is nothing there to ask about.
+   * lives in this window either way. The answer comes back asynchronously, so
+   * the close is always refused while a project is open and the departure is
+   * made afterwards by hand. With nothing open the request is left alone and the
+   * application really does quit — the welcome screen holds no work, so there is
+   * nothing there to ask about.
    */
   useEffect(() => {
     let detach: (() => void) | null = null
@@ -122,15 +155,11 @@ export function App() {
 
     void getCurrentWindow()
       .onCloseRequested((event) => {
-        const { media, history, savedMark } = useEditor.getState()
-        if (media.length === 0) return
-
+        if (useEditor.getState().media.length === 0) return
         event.preventDefault()
-
-        const unsaved =
-          !savedMark || savedMark.timeline !== history.present || savedMark.media !== media
-        if (unsaved) setAskingToSave(true)
-        else leaveProject()
+        void askAboutUnsavedWork().then((proceed) => {
+          if (proceed) leaveProject()
+        })
       })
       .then((unlisten) => {
         if (cancelled) unlisten()
@@ -141,16 +170,16 @@ export function App() {
       cancelled = true
       detach?.()
     }
-  }, [leaveProject])
+  }, [askAboutUnsavedWork, leaveProject])
 
-  const saveThenLeave = useCallback(() => {
+  const saveThenProceed = useCallback(() => {
     void saveNow().then((written) => {
-      // A dismissed picker is not a save, and leaving on it would throw away the
-      // work the question was asked about.
-      if (written) leaveProject()
+      // A dismissed picker is not a save, and going ahead on it would throw away
+      // the work the question was asked about.
+      if (written) settle(true)
       else setAskingToSave(false)
     })
-  }, [leaveProject, saveNow])
+  }, [saveNow, settle])
 
   // The editor window is created hidden. Reporting in after the first paint is
   // what makes it appear — two frames of margin, because a layout effect runs
@@ -230,7 +259,7 @@ export function App() {
 
   return (
     <div className="app-ground flex h-full flex-col">
-      <TitleBar onShowShortcuts={showShortcuts} />
+      <TitleBar onShowShortcuts={showShortcuts} onBeforeReplace={askAboutUnsavedWork} />
 
       {editing ? (
         <main className="flex min-h-0 flex-1 flex-col">
@@ -305,9 +334,9 @@ export function App() {
 
       <UnsavedDialog
         open={askingToSave}
-        onSave={saveThenLeave}
-        onDiscard={leaveProject}
-        onCancel={() => setAskingToSave(false)}
+        onSave={saveThenProceed}
+        onDiscard={() => settle(true)}
+        onCancel={() => settle(false)}
       />
 
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />

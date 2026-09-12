@@ -220,8 +220,7 @@ export const ptBR: Catalogue = {
   'update.downloading': 'Baixando…',
   'update.install': 'Instalar',
   'update.installNote': 'O Snip Join vai fechar para o instalador poder substituí-lo.',
-  'update.reveal': 'Mostrar o arquivo',
-  'update.portableNote': 'Esta cópia é portátil: descompacte o arquivo por cima da pasta de onde o Snip Join roda.',
+  'update.portableNote': 'Esta cópia é portátil: o Snip Join vai fechar, colocar a versão nova na pasta dele e abrir de novo.',
   'update.close': 'Fechar',
 
   'shortcuts.title': 'Teclado',

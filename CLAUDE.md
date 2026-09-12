@@ -439,15 +439,31 @@ wrong one would leave two Snip Joins on the machine, one of them in the registry
   from anywhere and then offer to run it. GitHub redirects to its asset storage
   and the client follows, so the guard is on where the chain begins — the part
   the reply cannot move.
-- **There is no signature check.** The trust is TLS and the repository, exactly
-  as if the user had clicked the same asset on the releases page. Making it
-  stronger means `tauri-plugin-updater`, a minisign key pair, and the private
-  half living in CI — a change to the release process, not to this code.
-- **Nothing self-replaces.** An installed copy runs its own installer and the
-  application exits behind it, because the installer cannot replace files this
-  process holds open. A portable copy is revealed in Explorer: finishing that job
-  on Windows means a script that runs after the application exits, which is not
-  worth one drag in Explorer.
+- **Every release is signed and every update is verified.** Minisign, the same
+  scheme Tauri's own updater uses: the bundler signs the installer, the release
+  job signs the portable archive with the same key, and `verify_signature` checks
+  the bytes against the public key compiled into `application/update.rs` before
+  the download is given its real name. The private half is the
+  `TAURI_SIGNING_PRIVATE_KEY` repository secret and exists nowhere else — **lose
+  it and no copy already in the wild will accept another update**, because they
+  all carry that public key. A release with no `.sig` beside an asset is not an
+  update at all: `compare` refuses it, and the release job fails rather than
+  publish one.
+- **A portable copy replaces itself; the new version does the work.** Windows
+  will not overwrite a running executable, so the archive is unpacked to a
+  temporary folder, a copy of the *new* executable is started with
+  `--finish-update <payload> <install>`, and this process exits. The finisher
+  waits for the old executable to be renamable, renames it to `.old`, copies the
+  new files over — never `data/`, which belongs to the user — and starts what it
+  installed. `lib.rs` reads that argument before anything else, including the web
+  view: that start is not an editor. No script is ever written.
+- **Unpacking treats the archive as hostile.** `enclosed_name` refuses `..` and
+  absolute paths; without it a crafted zip writes wherever it likes. There is a
+  test for exactly that.
+- **`app.exit` fires no close event.** Applying an update ends the process
+  without going through `onCloseRequested`, so it asked nothing about unsaved
+  work until `askAboutUnsavedWork` was lifted out of the close handler and given
+  to both callers. Anything else that ends the process has to ask too.
 - A repository with no releases answers 404, which is reported as "nothing to
   do". So is a release carrying nothing this copy could install — the button
   must never offer an update it would then refuse to fetch.

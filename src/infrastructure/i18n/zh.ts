@@ -214,8 +214,7 @@ export const zh: Catalogue = {
   'update.downloading': '正在下载…',
   'update.install': '安装',
   'update.installNote': 'Snip Join 将会关闭，以便安装程序替换它。',
-  'update.reveal': '显示文件',
-  'update.portableNote': '这是便携版：请将压缩包解压覆盖到 Snip Join 所在的文件夹。',
+  'update.portableNote': '这是便携版：Snip Join 将关闭，把新版本放入自己的文件夹后重新启动。',
   'update.close': '关闭',
 
   'shortcuts.title': '键盘',

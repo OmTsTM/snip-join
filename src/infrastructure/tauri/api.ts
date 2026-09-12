@@ -146,6 +146,8 @@ export interface UpdateRelease {
   readonly assetName: string
   readonly assetUrl: string
   readonly assetSize: number
+  /** Where the signature over that file is published. */
+  readonly signatureUrl: string
 }
 
 /**
@@ -225,15 +227,22 @@ export const api = {
    */
   checkForUpdate: () => call<UpdateReport>('check_for_update'),
 
-  /** Fetches the update into the downloads folder, answering with its path. */
-  downloadUpdate: (url: string, name: string) =>
-    call<string>('download_update', { url, name }),
+  /**
+   * Fetches the update into the downloads folder, answering with its path.
+   *
+   * It only gets a path if the signature over its bytes checks out against the
+   * key built into the binary; an update that fails that is deleted, not
+   * offered.
+   */
+  downloadUpdate: (url: string, name: string, signatureUrl: string) =>
+    call<string>('download_update', { url, name, signatureUrl }),
 
   /**
    * Hands the downloaded file over: runs the installer and closes Snip Join, or
    * shows the archive in Explorer for a portable copy.
    */
-  applyUpdate: (path: string) => call<void>('apply_update', { path }),
+  applyUpdate: (path: string, version: string) =>
+    call<void>('apply_update', { path, version }),
 } as const
 
 /** Event topics, matching `src-tauri/src/interface/events.rs`. */

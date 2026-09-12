@@ -77,11 +77,32 @@ pub async fn get_json(url: &str) -> AppResult<Option<Value>> {
     response.json().await.map(Some).map_err(|error| AppError::NetworkFailed(error.to_string()))
 }
 
-/// Downloads a file, reporting how much has arrived as it goes.
+/// Fetches a small text document, such as a signature.
+pub async fn get_text(url: &str) -> AppResult<String> {
+    let response = client(ASK_TIMEOUT, Some(ASK_TIMEOUT))?
+        .get(url)
+        .send()
+        .await
+        .map_err(|error| AppError::NetworkFailed(error.to_string()))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        return Err(AppError::NetworkFailed(format!("the server answered {status}")));
+    }
+
+    if response.content_length().is_some_and(|length| length > MAX_JSON_BYTES) {
+        return Err(AppError::NetworkFailed("that reply is far too large".into()));
+    }
+
+    response.text().await.map_err(|error| AppError::NetworkFailed(error.to_string()))
+}
+
+/// Downloads a file to exactly the path given, reporting progress as it goes.
 ///
-/// Written to a scratch name and renamed into place at the end, for the reason
-/// every download should be: a half a file that carries the name of a whole one
-/// is the thing a user double-clicks.
+/// The caller passes a scratch name and moves the file into place itself, once
+/// it is satisfied with what arrived. Nothing here decides that a download is
+/// finished business: a half a file — or a whole one nobody signed — that
+/// carries the name of a real one is the thing a user double-clicks.
 pub async fn download(
     url: &str,
     into: &Path,
@@ -103,12 +124,11 @@ pub async fn download(
         return Err(AppError::NetworkFailed("that file is far larger than an update".into()));
     }
 
-    let partial = into.with_extension("part");
-    if let Some(parent) = partial.parent() {
+    if let Some(parent) = into.parent() {
         tokio::fs::create_dir_all(parent).await?;
     }
 
-    let mut file = tokio::fs::File::create(&partial).await?;
+    let mut file = tokio::fs::File::create(into).await?;
     let mut received: u64 = 0;
 
     loop {
@@ -120,7 +140,7 @@ pub async fn download(
                 // mean a later attempt has to decide whether it is a resumable
                 // download or rubbish, and it is always rubbish.
                 drop(file);
-                let _ = tokio::fs::remove_file(&partial).await;
+                let _ = tokio::fs::remove_file(into).await;
                 return Err(AppError::NetworkFailed(error.to_string()));
             }
         };
@@ -128,7 +148,7 @@ pub async fn download(
         received += chunk.len() as u64;
         if received > MAX_DOWNLOAD_BYTES {
             drop(file);
-            let _ = tokio::fs::remove_file(&partial).await;
+            let _ = tokio::fs::remove_file(into).await;
             return Err(AppError::NetworkFailed("that file is far larger than an update".into()));
         }
 
@@ -138,11 +158,6 @@ pub async fn download(
 
     file.flush().await?;
     drop(file);
-
-    // Replaced rather than appended to: a previous attempt at the same version
-    // is stale by definition.
-    let _ = tokio::fs::remove_file(into).await;
-    tokio::fs::rename(&partial, into).await?;
 
     Ok(into.to_path_buf())
 }

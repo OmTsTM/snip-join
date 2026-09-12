@@ -12,10 +12,24 @@
 //! nothing more — there is no signature check, so an update is exactly as
 //! trustworthy as the repository it comes from.
 
+use base64::Engine;
 use serde_json::Value;
 
 use crate::application::error::{AppError, AppResult};
 use crate::domain::version::Version;
+
+/// The public half of the key every release is signed with.
+///
+/// In the source on purpose: it is public, it has to ship inside the binary to
+/// be worth anything, and pinning it here is what makes an update *this
+/// project's* update rather than whatever the network handed over. The private
+/// half is a GitHub Actions secret and exists nowhere else — losing it means
+/// future releases cannot be signed with it, and copies running this version
+/// would refuse them.
+const PUBLIC_KEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENFNzYzODFBQUU4NkU3QTcKUldTbjU0YXVHamgyenNwaW0rMk5RQk56bi9MUXVCSjhyV2hnRGlWNUphOENWYnArejdZMXFZVW8K";
+
+/// The extension the signature of an asset is published under.
+pub const SIGNATURE_SUFFIX: &str = ".sig";
 
 /// Where the newest published release is described.
 ///
@@ -119,6 +133,51 @@ pub fn is_download_allowed(url: &str) -> bool {
     url.starts_with(DOWNLOAD_PREFIX)
 }
 
+/// The signature published beside an asset, if it is there.
+pub fn signature_for<'a>(
+    assets: &'a [ReleaseAsset],
+    asset: &ReleaseAsset,
+) -> Option<&'a ReleaseAsset> {
+    let wanted = format!("{}{SIGNATURE_SUFFIX}", asset.name);
+    assets.iter().find(|candidate| candidate.name == wanted)
+}
+
+/// Whether these bytes were signed by this project's key.
+///
+/// The whole reason the update mechanism is defensible. Everything else about a
+/// download can be arranged by whoever is between the machine and GitHub — the
+/// address, the size, the name — but not a signature over the bytes, which
+/// nobody without the private half of the key can produce. A file that fails
+/// this is deleted rather than offered.
+///
+/// The format is minisign, wrapped in base64, which is what the Tauri signer
+/// writes: both the key and the signature are base64 of the file the tool
+/// produces.
+pub fn verify_signature(bytes: &[u8], signature: &str) -> AppResult<()> {
+    let engine = base64::engine::general_purpose::STANDARD;
+
+    let key_text = engine
+        .decode(PUBLIC_KEY.trim())
+        .ok()
+        .and_then(|raw| String::from_utf8(raw).ok())
+        .ok_or_else(|| AppError::Internal("this build has no readable signing key".into()))?;
+
+    let key = minisign_verify::PublicKey::decode(key_text.trim())
+        .map_err(|error| AppError::Internal(format!("the signing key is unreadable: {error}")))?;
+
+    let signature_text = engine
+        .decode(signature.trim())
+        .ok()
+        .and_then(|raw| String::from_utf8(raw).ok())
+        .ok_or_else(|| AppError::InvalidInput("that update has no readable signature".into()))?;
+
+    let signature = minisign_verify::Signature::decode(signature_text.trim())
+        .map_err(|_| AppError::InvalidInput("that update has no readable signature".into()))?;
+
+    key.verify(bytes, &signature, true)
+        .map_err(|_| AppError::InvalidInput("that update was not signed by Snip Join".into()))
+}
+
 /// What the update check has to say.
 #[derive(Debug, Clone)]
 pub struct UpdateReport {
@@ -130,14 +189,20 @@ pub struct UpdateReport {
 
 /// Compares what is running with what was published.
 ///
-/// A release with nothing attached for this kind of copy is reported as no
-/// update at all rather than as one the user cannot act on: the button would
-/// otherwise offer an update and then refuse to fetch it.
+/// A release with nothing installable is reported as no update at all rather
+/// than as one the user cannot act on: the button would otherwise offer an
+/// update and then refuse to fetch it. Installable means all three of a file for
+/// this kind of copy, a signature beside it, and both addresses inside this
+/// project's own releases — an unsigned release is not an update, because
+/// nothing downstream would accept it.
 pub fn compare(current: Version, kind: InstallKind, latest: Option<Release>) -> UpdateReport {
     let newer = latest.filter(|release| {
         release.version > current
-            && pick_asset(&release.assets, kind)
-                .is_some_and(|asset| is_download_allowed(&asset.url))
+            && pick_asset(&release.assets, kind).is_some_and(|asset| {
+                is_download_allowed(&asset.url)
+                    && signature_for(&release.assets, asset)
+                        .is_some_and(|signature| is_download_allowed(&signature.url))
+            })
     });
 
     UpdateReport { current, kind, newer }
@@ -161,7 +226,9 @@ mod tests {
             tag: tag.to_string(),
             assets: vec![
                 asset("Snip Join_1.1.0_x64-setup.exe"),
+                asset("Snip Join_1.1.0_x64-setup.exe.sig"),
                 asset("Snip Join_1.1.0_x64_portable.zip"),
+                asset("Snip Join_1.1.0_x64_portable.zip.sig"),
             ],
         }
     }
@@ -217,7 +284,7 @@ mod tests {
     #[test]
     fn a_release_with_nothing_for_this_copy_is_not_an_update() {
         let mut only_installer = release("v1.2.0");
-        only_installer.assets.retain(|asset| asset.name.ends_with(".exe"));
+        only_installer.assets.retain(|asset| asset.name.contains("setup.exe"));
 
         let current = Version::parse("1.1.0").unwrap();
         assert!(compare(current.clone(), InstallKind::Portable, Some(only_installer.clone()))
@@ -226,14 +293,59 @@ mod tests {
         assert!(compare(current, InstallKind::Installed, Some(only_installer)).newer.is_some());
     }
 
+    /// Signed with the project's own key, over the bytes of `sigtest.bin`.
+    /// Anything else here would be a test of nothing.
+    const TEST_BYTES: &[u8] = b"hello snip\n";
+    const TEST_SIGNATURE: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTbjU0YXVHamgyenVSdGY4U2laTms4NkJXcUZjTTJCaHZlY2o3bExyMEdkb1MyRGgyV2VHRFZIZ2Z1WURWWmNkRmc4MjRlU0VjbndySnBzaHd4Tm5Ddis2c2RWMTBOY0E4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5MjEzOTczCWZpbGU6c2lndGVzdC5iaW4KVHI3RmdMcGVrTE95MGUwTnVnalFqTzJlOVB3bDBSM0xVaFYzUk5YSFdmbjNZNFNRRE42SGlneXFjMmxZZmFQQnkvUGV4blcyMVJnRXd5K055Vkl4Q1E9PQo=";
+
+    #[test]
+    fn a_file_signed_with_the_projects_key_verifies() {
+        assert!(verify_signature(TEST_BYTES, TEST_SIGNATURE).is_ok());
+    }
+
+    #[test]
+    fn a_single_changed_byte_fails() {
+        let mut tampered = TEST_BYTES.to_vec();
+        tampered[0] = b'H';
+        assert!(verify_signature(&tampered, TEST_SIGNATURE).is_err());
+    }
+
+    #[test]
+    fn rubbish_in_place_of_a_signature_fails_rather_than_panics() {
+        for signature in ["", "not base64 at all !!", "aGVsbG8="] {
+            assert!(verify_signature(TEST_BYTES, signature).is_err(), "{signature}");
+        }
+    }
+
+    #[test]
+    fn a_release_with_no_signature_is_not_an_update() {
+        let mut unsigned = release("v1.2.0");
+        unsigned.assets.retain(|asset| !asset.name.ends_with(SIGNATURE_SUFFIX));
+
+        let current = Version::parse("1.1.0").unwrap();
+        assert!(compare(current, InstallKind::Installed, Some(unsigned)).newer.is_none());
+    }
+
+    #[test]
+    fn each_asset_is_matched_with_its_own_signature() {
+        let assets = release("v1.1.0").assets;
+        let installer = pick_asset(&assets, InstallKind::Installed).unwrap();
+        let signature = signature_for(&assets, installer).unwrap();
+
+        assert_eq!(signature.name, format!("{}{SIGNATURE_SUFFIX}", installer.name));
+    }
+
     #[test]
     fn a_download_address_pointing_elsewhere_is_not_an_update_either() {
         let mut tampered = release("v1.2.0");
-        tampered.assets = vec![ReleaseAsset {
-            name: "Snip Join_1.2.0_x64-setup.exe".into(),
-            url: "https://example.com/setup.exe".into(),
-            size: 10,
-        }];
+        tampered.assets = vec![
+            ReleaseAsset {
+                name: "Snip Join_1.2.0_x64-setup.exe".into(),
+                url: "https://example.com/setup.exe".into(),
+                size: 10,
+            },
+            asset("Snip Join_1.2.0_x64-setup.exe.sig"),
+        ];
 
         let current = Version::parse("1.1.0").unwrap();
         assert!(compare(current, InstallKind::Installed, Some(tampered)).newer.is_none());

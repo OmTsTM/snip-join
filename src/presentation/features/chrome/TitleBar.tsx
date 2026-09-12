@@ -31,7 +31,14 @@ import { formatTimecode } from '@domain/time'
  */
 const PROJECT_URL = 'https://github.com/OmTsTM/snip-join'
 
-export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => void }) {
+export function TitleBar({
+  onShowShortcuts,
+  onBeforeReplace,
+}: {
+  readonly onShowShortcuts: () => void
+  /** Asks about unsaved work; answers whether the application may be replaced. */
+  readonly onBeforeReplace: () => Promise<boolean>
+}) {
   const { t, locale, setLocale } = useI18n()
   const skin = useSkin((state) => state.skin)
   const setSkin = useSkin((state) => state.setSkin)
@@ -112,7 +119,7 @@ export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => 
         <OpenProject />
         {source && <OpenAnother />}
 
-        <UpdateButton />
+        <UpdateButton onBeforeReplace={onBeforeReplace} />
 
         <button
           type="button"

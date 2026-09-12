@@ -56,7 +56,11 @@ type Stage =
  * nobody is told about a release they do not go looking for, which is the right
  * side to err on for a tool that works perfectly well as it is.
  */
-export function UpdateButton() {
+export function UpdateButton({
+  onBeforeReplace,
+}: {
+  readonly onBeforeReplace: () => Promise<boolean>
+}) {
   const t = useT()
   const reportError = useEditor((state) => state.reportError)
   const [stage, setStage] = useState<Stage | null>(null)
@@ -90,7 +94,7 @@ export function UpdateButton() {
       })
 
       void api
-        .downloadUpdate(release.assetUrl, release.assetName)
+        .downloadUpdate(release.assetUrl, release.assetName, release.signatureUrl)
         .then((path) => {
           if (openRef.current) setStage({ kind: 'ready', report, release, path })
         })
@@ -118,15 +122,23 @@ export function UpdateButton() {
   }, [downloading])
 
   const apply = useCallback(
-    (path: string) => {
-      // An installer takes the application down with it, so there is nothing to
-      // set afterwards; revealing a portable archive leaves the dialog done.
-      void api
-        .applyUpdate(path)
-        .then(() => setStage(null))
-        .catch((error: unknown) => reportError(error))
+    (path: string, version: string) => {
+      // Asked first, because applying an update ends this process: the installer
+      // needs the application gone before it can replace its files, and a
+      // portable copy is swapped and relaunched. Neither goes through the
+      // window's close event, so neither would otherwise ask.
+      void onBeforeReplace().then((proceed) => {
+        if (!proceed) return
+
+        // Nothing to set afterwards on the paths that take the application down
+        // with them; revealing a portable archive leaves the dialog done.
+        void api
+          .applyUpdate(path, version)
+          .then(() => setStage(null))
+          .catch((error: unknown) => reportError(error))
+      })
     },
-    [reportError],
+    [onBeforeReplace, reportError],
   )
 
   return (
@@ -160,7 +172,7 @@ function UpdateDialog({
   readonly stage: Stage | null
   readonly onClose: () => void
   readonly onDownload: (report: UpdateReport, release: UpdateRelease) => void
-  readonly onApply: (path: string) => void
+  readonly onApply: (path: string, version: string) => void
 }) {
   const t = useT()
 
@@ -279,7 +291,7 @@ function Actions({
   readonly stage: Stage
   readonly onClose: () => void
   readonly onDownload: (report: UpdateReport, release: UpdateRelease) => void
-  readonly onApply: (path: string) => void
+  readonly onApply: (path: string, version: string) => void
 }) {
   const t = useT()
 
@@ -319,8 +331,12 @@ function Actions({
       )}
 
       {stage.kind === 'ready' && (
-        <Button size="sm" tone="paper" onClick={() => onApply(stage.path)}>
-          {stage.report.kind === 'portable' ? t('update.reveal') : t('update.install')}
+        <Button
+          size="sm"
+          tone="paper"
+          onClick={() => onApply(stage.path, stage.release.version)}
+        >
+          {t('update.install')}
         </Button>
       )}
     </>

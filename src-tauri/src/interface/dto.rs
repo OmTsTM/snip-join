@@ -273,6 +273,8 @@ pub struct UpdateReleaseDto {
     pub asset_name: String,
     pub asset_url: String,
     pub asset_size: u64,
+    /// Where the signature over that file is published.
+    pub signature_url: String,
 }
 
 /// How far a download has come.

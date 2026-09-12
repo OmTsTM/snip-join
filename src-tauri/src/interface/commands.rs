@@ -1,10 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_opener::OpenerExt;
 
 use crate::application::error::{AppError, AppResult};
-use crate::application::{export_plan, media_library, project_file, update};
+use crate::application::{export_plan, media_library, portable_update, project_file, update};
 use crate::domain::media::MediaSource;
 use crate::domain::version::Version;
 use crate::infrastructure::executor;
@@ -452,28 +451,42 @@ pub async fn check_for_update(app: AppHandle) -> AppResult<UpdateReportDto> {
         // command that panics takes the window with it.
         newer: report.newer.and_then(|release| {
             let asset = update::pick_asset(&release.assets, kind)?;
+            let signature = update::signature_for(&release.assets, asset)?;
             Some(UpdateReleaseDto {
                 version: release.version.to_string(),
                 tag: release.tag.clone(),
                 asset_name: asset.name.clone(),
                 asset_url: asset.url.clone(),
                 asset_size: asset.size,
+                signature_url: signature.url.clone(),
             })
         }),
     })
 }
 
-/// Fetches the file the check found.
+/// Fetches the file the check found, and refuses it unless it was signed here.
 ///
-/// The address is checked against the project's own release downloads before a
-/// single byte is requested. It arrived in a JSON document from the network, and
-/// a URL from there is untrusted input like any other — without this, a tampered
-/// reply could have the application download anything from anywhere and then
-/// offer to run it.
+/// Both addresses are checked against the project's own release downloads before
+/// a single byte is requested. They arrived in a JSON document from the network,
+/// and a URL from there is untrusted input like any other — without this, a
+/// tampered reply could have the application download anything from anywhere and
+/// then offer to run it.
+///
+/// The file lands under a scratch name and is only given its real one once the
+/// signature over its bytes checks out against the key built into this binary.
+/// Everything else about a download can be arranged by whoever sits between this
+/// machine and GitHub; that signature cannot.
 #[tauri::command]
-pub async fn download_update(app: AppHandle, url: String, name: String) -> AppResult<String> {
-    if !update::is_download_allowed(&url) {
-        return Err(AppError::InvalidInput("that download is not from Snip Join".into()));
+pub async fn download_update(
+    app: AppHandle,
+    url: String,
+    name: String,
+    signature_url: String,
+) -> AppResult<String> {
+    for address in [&url, &signature_url] {
+        if !update::is_download_allowed(address) {
+            return Err(AppError::InvalidInput("that download is not from Snip Join".into()));
+        }
     }
 
     // The name comes from the same document. Only its last component is used,
@@ -485,30 +498,44 @@ pub async fn download_update(app: AppHandle, url: String, name: String) -> AppRe
         .ok_or_else(|| AppError::InvalidInput("that file has no name".into()))?;
 
     let destination = downloads_dir(&app).join(file_name);
+    let partial = destination.with_extension("part");
+
+    // Asked for first: a signature that is not there is a reason not to spend
+    // fifty megabytes of somebody's connection.
+    let signature = http::get_text(&signature_url).await?;
 
     let handle = app.clone();
-    let path = http::download(&url, &destination, move |received, total| {
+    http::download(&url, &partial, move |received, total| {
         let _ = handle.emit(events::UPDATE_PROGRESS, UpdateProgress { received, total });
     })
     .await?;
 
-    Ok(path.to_string_lossy().to_string())
+    let bytes = tokio::fs::read(&partial).await?;
+    if let Err(refusal) = update::verify_signature(&bytes, &signature) {
+        let _ = tokio::fs::remove_file(&partial).await;
+        return Err(refusal);
+    }
+
+    // A previous attempt at the same version is stale by definition.
+    let _ = tokio::fs::remove_file(&destination).await;
+    tokio::fs::rename(&partial, &destination).await?;
+
+    Ok(destination.to_string_lossy().to_string())
 }
 
-/// Hands the downloaded update over.
+/// Hands the downloaded update over, and gets out of its way.
 ///
-/// An installed copy is replaced by its own installer, which needs Snip Join to
-/// have let go of its files first — so the installer is started and the
-/// application closes behind it. A portable copy is not touched: the archive is
-/// revealed in Explorer and the user unzips it over the folder they keep it in.
+/// Both kinds of copy end the same way — this process exits and a new Snip Join
+/// takes its place — and differ only in who does the replacing. An installed
+/// copy has an installer that knows how; a portable copy is a folder somebody
+/// unzipped, so the new version finishes the job for the old one: it is unpacked
+/// beside the folder, a copy of the new executable is started with
+/// `--finish-update`, and this process leaves so its own files can be replaced.
 ///
-/// Deliberately not a self-replacing updater. A portable copy could rename its
-/// own executable and copy a new one in beside it, and every way of finishing
-/// that job on Windows ends in a script that runs after the application has
-/// exited — a thing this application otherwise never does, for a saving of one
-/// drag in Explorer.
+/// Whichever path is taken, the renderer has already asked about unsaved work:
+/// neither of these goes through the window's close event.
 #[tauri::command]
-pub async fn apply_update(app: AppHandle, path: String) -> AppResult<()> {
+pub async fn apply_update(app: AppHandle, path: String, version: String) -> AppResult<()> {
     let file = Path::new(&path);
     if !file.is_file() {
         return Err(AppError::InvalidInput("that update is no longer there".into()));
@@ -516,9 +543,34 @@ pub async fn apply_update(app: AppHandle, path: String) -> AppResult<()> {
 
     match install_kind() {
         update::InstallKind::Portable => {
-            app.opener()
-                .reveal_item_in_dir(file)
-                .map_err(|error| AppError::Internal(error.to_string()))?;
+            let install = portable::root()
+                .cloned()
+                .ok_or_else(|| AppError::Internal("this copy has no folder of its own".into()))?;
+
+            // Unpacked and checked before anything is touched: an archive that
+            // is not a Snip Join copy has to fail while the old one is still
+            // running and still able to say so.
+            let staging = portable_update::staging(&version);
+            let _ = std::fs::remove_dir_all(&staging);
+            let payload = portable_update::extract(file, &staging)?;
+
+            // The finisher is a copy of the *new* executable, placed outside the
+            // folder about to be replaced — it cannot be inside it, since that
+            // is the folder it is going to overwrite.
+            let finisher = staging.join("finish-update.exe");
+            std::fs::copy(payload.join(portable_update::EXECUTABLE), &finisher)?;
+
+            std::process::Command::new(&finisher)
+                .arg("--finish-update")
+                .arg(&payload)
+                .arg(&install)
+                .current_dir(&staging)
+                .spawn()
+                .map_err(|error| {
+                    AppError::Internal(format!("the update would not start: {error}"))
+                })?;
+
+            app.exit(0);
             Ok(())
         }
         update::InstallKind::Installed => {

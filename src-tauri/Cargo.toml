@@ -1,6 +1,6 @@
 [package]
 name = "snipjoin"
-version = "1.1.0"
+version = "1.1.1"
 description = "Snip a stretch out of any video, join what is left, and export it."
 authors = ["Snip Join"]
 edition = "2021"
@@ -35,6 +35,14 @@ which = "7"
 # on Windows that is schannel and the machine's own certificate store, which is
 # the same trust the user's browser would apply to the same download.
 reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls", "charset"] }
+# Verifying that an update was signed by this project's own key. Minisign is the
+# same scheme Tauri's own updater uses, so the signatures the release workflow
+# already produces are the ones this checks.
+minisign-verify = "0.2"
+# Unpacking a portable update. Deflate only: the archive this reads is the one
+# this project's own packer writes, and the rest of the formats are weight.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+base64 = "0.22"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dunce = "1"

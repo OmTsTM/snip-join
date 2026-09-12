@@ -219,8 +219,7 @@ export const es: Catalogue = {
   'update.downloading': 'Descargando…',
   'update.install': 'Instalarla',
   'update.installNote': 'Snip Join se cerrará para que el instalador pueda reemplazarlo.',
-  'update.reveal': 'Mostrar el archivo',
-  'update.portableNote': 'Esta copia es portátil: descomprime el archivo sobre la carpeta desde la que se ejecuta Snip Join.',
+  'update.portableNote': 'Esta copia es portátil: Snip Join se cerrará, pondrá la nueva versión en su carpeta y volverá a abrirse.',
   'update.close': 'Cerrar',
 
   'shortcuts.title': 'Teclado',

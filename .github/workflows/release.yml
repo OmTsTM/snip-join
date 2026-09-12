@@ -89,10 +89,17 @@ jobs:
         run: cargo test
         working-directory: src-tauri
 
-      - name: Build the installers and publish the release
+      # Signed here, and verified by the application before it will install
+      # anything: the private half of this key exists only as a repository
+      # secret, so a release that is not signed with it is one no copy of Snip
+      # Join will accept. Losing the key means future releases cannot be signed
+      # with it and installed copies will refuse them.
+      - name: Build the installer and publish the release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event.inputs.tag || github.ref_name }}
           releaseName: Snip Join ${{ steps.naming.outputs.version }}
@@ -104,6 +111,9 @@ jobs:
 
             Cuts are copies by default — no decoding, no encoding, seconds
             rather than minutes, and no graphics card required.
+
+            The `.sig` files are the signatures Snip Join checks before it
+            installs an update. They are not something to download.
           # Drafted here and published at the end of this job, once the portable
           # archive has been attached. A release that appears the moment the
           # installer is uploaded is a release somebody downloads while it is
@@ -121,7 +131,37 @@ jobs:
           $tag = "${{ github.event.inputs.tag || github.ref_name }}"
           $version = "${{ steps.naming.outputs.version }}"
           pnpm portable:pack
-          gh release upload $tag "src-tauri/target/release/bundle/portable/Snip Join_${version}_x64_portable.zip" --clobber
+
+          $archive = "src-tauri/target/release/bundle/portable/Snip Join_${version}_x64_portable.zip"
+
+          # The bundler signs what it builds; this one it did not build, so it
+          # is signed here with the same key. Without a signature beside it the
+          # application refuses the file, which would leave portable copies
+          # unable to update at all.
+          pnpm exec tauri signer sign $archive
+
+          gh release upload $tag $archive "$archive.sig" --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      # Every asset the application might reach for has to be there, and the
+      # signature is half of each pair: an update with no signature beside it is
+      # one that will be refused on the machine it lands on, which is a failure
+      # worth having here instead.
+      - name: Check the release is complete
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.inputs.tag || github.ref_name }}"
+          $assets = gh release view $tag --json assets --jq '.assets[].name'
+          Write-Output $assets
+
+          foreach ($pattern in @('-setup.exe$', '-setup.exe.sig$', '_portable.zip$', '_portable.zip.sig$')) {
+            if (-not ($assets | Where-Object { $_ -match $pattern })) {
+              throw "the release has nothing matching $pattern"
+            }
+          }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

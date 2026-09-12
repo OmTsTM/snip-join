@@ -109,13 +109,27 @@ the whole project reach the internet, and this is all of them:
 - **`scripts/fetch-ffmpeg.mjs`**, which downloads the FFmpeg build that gets
   packaged. A developer and CI step; the installed application never runs it.
 
-**An update is not signature-verified.** It is fetched over TLS from this
-project's own releases and is exactly as trustworthy as the repository it comes
-from — the same trust as clicking the asset on the releases page by hand. An
-installed copy runs the downloaded installer, which puts its own window and its
-own UAC prompt on screen; nothing is executed silently, and nothing runs without
-the user pressing "install". A portable copy is not touched at all: the archive
-is revealed in Explorer.
+**Every update is signed, and the signature is checked before it is offered.**
+Releases are signed in CI with a minisign key whose private half exists only as a
+repository secret; the public half is compiled into the application. The
+downloaded file lands under a scratch name, its signature is verified against
+those bytes, and only then is it given its real name — a file that fails is
+deleted, not offered. TLS decides who you are talking to; this decides what you
+were given, which is the part TLS cannot help with once a release page, a mirror
+or a cache is in the way.
+
+An installed copy runs the downloaded installer, which puts its own window and
+its own UAC prompt on screen. A portable copy is replaced in place: the archive
+is unpacked to a temporary folder, checked for the shape of a Snip Join copy,
+and a copy of the *new* executable is started with `--finish-update` to do the
+swap once this process has exited — the folder's `data` directory is left
+untouched, and the outgoing executable is renamed rather than deleted. Nothing
+is executed without the user pressing "install", and no script is written to
+disk to make any of it happen.
+
+Unpacking treats the archive as hostile: an entry naming a path outside the
+folder it is being written to is refused outright, which is what stops a crafted
+zip from writing into Windows.
 
 ## Scope
 

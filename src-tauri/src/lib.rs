@@ -35,12 +35,33 @@ pub fn run() {
         .with_target(false)
         .init();
 
+    // Before anything else, including the web view: this start may not be an
+    // editor at all. A portable copy that is updating starts a copy of the new
+    // executable purely to replace the old one's files, which is a job that has
+    // to happen while no Snip Join is running out of that folder.
+    if let Some((payload, install)) =
+        application::portable_update::finishing_arguments(std::env::args())
+    {
+        match application::portable_update::finish(&payload, &install) {
+            Ok(()) => return,
+            Err(error) => {
+                tracing::error!(%error, "the update could not be finished");
+                return;
+            }
+        }
+    }
+
     // Must precede the web view: the user-data folder is read once, at creation.
     infrastructure::portable::apply_environment();
 
     // A crash or a forced quit skips the scratch cleanup that normally runs on
     // drop, so anything left behind by a previous session is swept at startup.
     infrastructure::paths::sweep_stale_scratch();
+
+    // And, if this start is the first after an update, the copy it replaced.
+    if let Some(root) = infrastructure::portable::root() {
+        application::portable_update::sweep(root);
+    }
 
     // Windows passes a file here when the application is picked from "Open with"
     // or a video is dropped onto its shortcut.

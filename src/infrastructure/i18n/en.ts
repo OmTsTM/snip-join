@@ -222,8 +222,7 @@ export const en = {
   'update.downloading': 'Downloading…',
   'update.install': 'Install it',
   'update.installNote': 'Snip Join will close so the installer can replace it.',
-  'update.reveal': 'Show the file',
-  'update.portableNote': 'This copy is portable: unzip the archive over the folder Snip Join runs from.',
+  'update.portableNote': 'This copy is portable: Snip Join will close, put the new version in its folder and start again.',
   'update.close': 'Close',
 
   'shortcuts.title': 'Keyboard',

@@ -250,12 +250,18 @@ on your PATH. Each release carries the current FFmpeg release build, fetched
 automatically at packaging time.
 
 **Updating.** The download button in the title bar asks GitHub what the newest
-release is and, if it is ahead of the copy running, fetches the right file for
-it — the installer for an installed copy, the archive for a portable one — into
-your downloads folder. Installing closes Snip Join so the installer can replace
-it; a portable copy is shown in Explorer for you to unzip over the folder it runs
-from. Nothing is checked, fetched or run unless you press the button: the
-application makes no network request of its own accord.
+release is and, if it is ahead of the copy running, fetches the right file for it
+— the installer for an installed copy, the archive for a portable one — into your
+downloads folder. Every release is signed, and an update whose signature does not
+check out against the key built into Snip Join is deleted rather than offered.
+
+Installing takes a moment and needs no attention: an installed copy closes so its
+installer can replace it, and a portable copy closes, puts the new version in its
+own folder — keeping everything under `data` — and starts again. Unsaved work is
+asked about first either way.
+
+Nothing is checked, fetched or run unless you press the button: the application
+makes no network request of its own accord.
 
 Two ways to get it, both in `src-tauri/target/release/bundle/`:
 
