@@ -236,6 +236,7 @@ export const ptBR: Catalogue = {
   'update.running': 'Você está com a {version}.',
   'update.notes': 'O que mudou',
   'update.download': 'Baixar ({size})',
+  'update.downloadPlain': 'Baixar',
   'update.downloading': 'Baixando…',
   'update.install': 'Instalar',
   'update.installNote': 'O Snip Join vai fechar para o instalador poder substituí-lo.',

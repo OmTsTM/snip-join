@@ -33,6 +33,34 @@ const MAX_JSON_BYTES: u64 = 1024 * 1024;
 /// Largest file accepted on download. The installer is tens of megabytes.
 const MAX_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024;
 
+/// The whole reason, not the top of it.
+///
+/// `reqwest::Error` prints "error sending request for url (…)" and keeps the
+/// part worth reading — "dns error: no such host", "the handshake failed", "an
+/// attempt was made to access a socket in a way forbidden by its access
+/// permissions" — in its source chain. Those three are a name server, a TLS
+/// stack and a firewall, which are three different problems with three different
+/// answers, and printing only the first line makes every one of them look the
+/// same. Whoever ends up reading this message is the only person who can act on
+/// it, so they get all of it.
+fn because(error: &dyn std::error::Error) -> String {
+    let mut reason = error.to_string();
+    let mut source = error.source();
+
+    while let Some(cause) = source {
+        let text = cause.to_string();
+        // Layers often restate the layer above them; saying it twice helps
+        // nobody.
+        if !reason.contains(&text) {
+            reason.push_str(": ");
+            reason.push_str(&text);
+        }
+        source = cause.source();
+    }
+
+    reason
+}
+
 fn client(connect: Duration, overall: Option<Duration>) -> AppResult<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
         .user_agent(USER_AGENT)
@@ -45,7 +73,7 @@ fn client(connect: Duration, overall: Option<Duration>) -> AppResult<reqwest::Cl
         builder = builder.timeout(overall);
     }
 
-    builder.build().map_err(|error| AppError::NetworkFailed(error.to_string()))
+    builder.build().map_err(|error| AppError::NetworkFailed(because(&error)))
 }
 
 /// Fetches a small JSON document, or nothing if the server says there is none.
@@ -66,7 +94,7 @@ pub async fn get_json(url: &str) -> AppResult<Option<Value>> {
         // failed over, and all of them are gone by the second attempt.
         Err(_) => {
             tokio::time::sleep(Duration::from_secs(1)).await;
-            ask(&client, url).await.map_err(|error| AppError::NetworkFailed(error.to_string()))?
+            ask(&client, url).await.map_err(|error| AppError::NetworkFailed(because(&error)))?
         }
     };
 
@@ -82,7 +110,7 @@ pub async fn get_json(url: &str) -> AppResult<Option<Value>> {
         return Err(AppError::NetworkFailed("that reply is far too large".into()));
     }
 
-    response.json().await.map(Some).map_err(|error| AppError::NetworkFailed(error.to_string()))
+    response.json().await.map(Some).map_err(|error| AppError::NetworkFailed(because(&error)))
 }
 
 async fn ask(client: &reqwest::Client, url: &str) -> Result<reqwest::Response, reqwest::Error> {
@@ -95,7 +123,7 @@ pub async fn get_text(url: &str) -> AppResult<String> {
         .get(url)
         .send()
         .await
-        .map_err(|error| AppError::NetworkFailed(error.to_string()))?;
+        .map_err(|error| AppError::NetworkFailed(because(&error)))?;
 
     let status = response.status();
     if !status.is_success() {
@@ -106,7 +134,32 @@ pub async fn get_text(url: &str) -> AppResult<String> {
         return Err(AppError::NetworkFailed("that reply is far too large".into()));
     }
 
-    response.text().await.map_err(|error| AppError::NetworkFailed(error.to_string()))
+    response.text().await.map_err(|error| AppError::NetworkFailed(because(&error)))
+}
+
+/// Where a URL sends a browser, without going there.
+///
+/// Used to ask the releases page which release is newest when the API host
+/// cannot be reached at all.
+pub async fn redirect_target(url: &str) -> AppResult<Option<String>> {
+    let client = reqwest::Client::builder()
+        .user_agent(USER_AGENT)
+        .connect_timeout(ASK_TIMEOUT)
+        .timeout(ASK_TIMEOUT)
+        // The answer is the redirect itself, so following it would throw away
+        // the only thing being asked for.
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|error| AppError::NetworkFailed(because(&error)))?;
+
+    let response =
+        client.get(url).send().await.map_err(|error| AppError::NetworkFailed(because(&error)))?;
+
+    Ok(response
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string))
 }
 
 /// Downloads a file to exactly the path given, reporting progress as it goes.
@@ -124,7 +177,7 @@ pub async fn download(
         .get(url)
         .send()
         .await
-        .map_err(|error| AppError::NetworkFailed(error.to_string()))?;
+        .map_err(|error| AppError::NetworkFailed(because(&error)))?;
 
     let status = response.status();
     if !status.is_success() {

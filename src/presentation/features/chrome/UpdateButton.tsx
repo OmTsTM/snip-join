@@ -326,7 +326,9 @@ function Actions({
           title={t('hint.updateDownload')}
           onClick={() => onDownload(stage.report, stage.report.newer!)}
         >
-          {t('update.download', { size: formatBytes(stage.report.newer.assetSize) })}
+          {stage.report.newer.assetSize > 0
+            ? t('update.download', { size: formatBytes(stage.report.newer.assetSize) })
+            : t('update.downloadPlain')}
         </Button>
       )}
 

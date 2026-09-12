@@ -235,6 +235,7 @@ export const es: Catalogue = {
   'update.running': 'Estás usando la {version}.',
   'update.notes': 'Qué cambió',
   'update.download': 'Descargar ({size})',
+  'update.downloadPlain': 'Descargar',
   'update.downloading': 'Descargando…',
   'update.install': 'Instalarla',
   'update.installNote': 'Snip Join se cerrará para que el instalador pueda reemplazarlo.',

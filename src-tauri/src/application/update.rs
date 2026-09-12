@@ -38,6 +38,16 @@ pub const SIGNATURE_SUFFIX: &str = ".sig";
 pub const LATEST_RELEASE_URL: &str =
     "https://api.github.com/repos/OmTsTM/snip-join/releases/latest";
 
+/// The same question, asked of the website instead of the API.
+///
+/// `api.github.com` and `github.com` are different names, and a machine can
+/// reach one and not the other: a DNS filter, a security suite's web shield or
+/// a network that allowlists hosts will often know about the site and nothing
+/// about its API. This page answers with a redirect to the newest release's tag,
+/// which is enough to know whether there is a newer version and what its files
+/// are called.
+pub const LATEST_RELEASE_PAGE: &str = "https://github.com/OmTsTM/snip-join/releases/latest";
+
 /// Every download has to start here.
 ///
 /// The addresses come out of a JSON document fetched over the network, and a
@@ -176,6 +186,50 @@ pub fn verify_signature(bytes: &[u8], signature: &str) -> AppResult<()> {
 
     key.verify(bytes, &signature, true)
         .map_err(|_| AppError::InvalidInput("that update was not signed by Snip Join".into()))
+}
+
+/// Reads the tag out of wherever the releases page sends a browser.
+///
+/// The address is checked as carefully as any other from the network: it has to
+/// be this project's own releases, and what follows has to be a version rather
+/// than whatever the reply felt like saying.
+pub fn tag_from_redirect(location: &str) -> Option<String> {
+    const MARK: &str = "/OmTsTM/snip-join/releases/tag/";
+
+    let (before, tag) = location.split_once(MARK)?;
+    if !(before.is_empty() || before == "https://github.com") {
+        return None;
+    }
+
+    let tag = tag.split(['?', '#', '/']).next()?;
+    Version::parse(tag)?;
+    Some(tag.to_string())
+}
+
+/// The files a release of this project is known to carry.
+///
+/// Built from the tag rather than read from a listing, because the listing is
+/// the thing that could not be reached. The names are the ones the release job
+/// produces, with the spaces GitHub replaces with dots — a convention this
+/// project controls at both ends. A download that turns out not to be there
+/// fails as a download rather than as a wrong answer about whether an update
+/// exists, and the signature beside it still has to check out either way.
+pub fn expected_assets(tag: &str, version: &Version) -> Vec<ReleaseAsset> {
+    ["x64-setup.exe", "x64_portable.zip"]
+        .iter()
+        .flat_map(|kind| {
+            let name = format!("Snip.Join_{version}_{kind}");
+            let signature = format!("{name}{SIGNATURE_SUFFIX}");
+            [name, signature]
+        })
+        .map(|name| ReleaseAsset {
+            url: format!("{DOWNLOAD_PREFIX}{tag}/{name}"),
+            name,
+            // Unknown until it arrives, and the progress bar copes: what the
+            // server reports on the way is what it draws.
+            size: 0,
+        })
+        .collect()
 }
 
 /// What the update check has to say.
@@ -369,6 +423,50 @@ mod tests {
         assert_eq!(release.version, Version::parse("1.2.0").unwrap());
         assert_eq!(release.assets.len(), 1, "entries missing a field are dropped");
         assert_eq!(release.assets[0].size, 42);
+    }
+
+    #[test]
+    fn the_releases_page_answers_with_the_newest_tag() {
+        for location in [
+            "https://github.com/OmTsTM/snip-join/releases/tag/v1.2.0",
+            "/OmTsTM/snip-join/releases/tag/v1.2.0",
+            "https://github.com/OmTsTM/snip-join/releases/tag/v1.2.0?foo=bar",
+        ] {
+            assert_eq!(tag_from_redirect(location).as_deref(), Some("v1.2.0"), "{location}");
+        }
+    }
+
+    #[test]
+    fn a_redirect_anywhere_else_is_refused() {
+        for location in [
+            "https://github.com/someone-else/snip-join/releases/tag/v1.2.0",
+            "https://example.com/OmTsTM/snip-join/releases/tag/v1.2.0",
+            "https://github.com/OmTsTM/snip-join/releases/tag/nightly",
+            "https://github.com/OmTsTM/snip-join/releases",
+            "",
+        ] {
+            assert!(tag_from_redirect(location).is_none(), "{location} should be refused");
+        }
+    }
+
+    /// The fallback has to produce a release the rest of this module accepts,
+    /// or it is an answer nobody can act on.
+    #[test]
+    fn a_release_built_from_a_tag_alone_is_installable() {
+        let version = Version::parse("1.2.0").unwrap();
+        let assets = expected_assets("v1.2.0", &version);
+
+        let release = Release { version, tag: "v1.2.0".into(), assets };
+        let current = Version::parse("1.1.0").unwrap();
+
+        for kind in [InstallKind::Installed, InstallKind::Portable] {
+            let report = compare(current.clone(), kind, Some(release.clone()));
+            let newer = report.newer.expect("an update");
+            let asset = pick_asset(&newer.assets, kind).unwrap();
+
+            assert!(is_download_allowed(&asset.url));
+            assert!(signature_for(&newer.assets, asset).is_some());
+        }
     }
 
     #[test]

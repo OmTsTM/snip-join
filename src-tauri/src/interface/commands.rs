@@ -423,10 +423,7 @@ pub async fn check_for_update(app: AppHandle) -> AppResult<UpdateReportDto> {
 
     let kind = install_kind();
 
-    let latest = match http::get_json(update::LATEST_RELEASE_URL).await? {
-        Some(body) => Some(update::parse_release(&body)?),
-        None => None,
-    };
+    let latest = latest_release().await?;
 
     let report = update::compare(current, kind, latest);
 
@@ -452,6 +449,42 @@ pub async fn check_for_update(app: AppHandle) -> AppResult<UpdateReportDto> {
             })
         }),
     })
+}
+
+/// Asks what the newest release is, two ways.
+///
+/// The API first, because it answers with everything. If that request never
+/// gets off the machine — a name that does not resolve, a shield that blocks the
+/// connection, a network that has never heard of `api.github.com` — the website
+/// is asked the same question, and where it sends a browser is enough: the tag
+/// gives the version, and this project's own release job decides what the files
+/// beside it are called.
+///
+/// If both walls are the same wall, the first reason is the one reported: it is
+/// the request that was supposed to work.
+async fn latest_release() -> AppResult<Option<update::Release>> {
+    let reason = match http::get_json(update::LATEST_RELEASE_URL).await {
+        Ok(Some(body)) => return Ok(Some(update::parse_release(&body)?)),
+        Ok(None) => return Ok(None),
+        Err(reason) => reason,
+    };
+
+    tracing::info!("the API could not be reached; asking the releases page instead");
+
+    let Ok(Some(location)) = http::redirect_target(update::LATEST_RELEASE_PAGE).await else {
+        return Err(reason);
+    };
+
+    let Some(tag) = update::tag_from_redirect(&location) else {
+        return Err(reason);
+    };
+
+    let Some(version) = Version::parse(&tag) else {
+        return Err(reason);
+    };
+
+    let assets = update::expected_assets(&tag, &version);
+    Ok(Some(update::Release { version, tag, assets }))
 }
 
 /// Fetches the file the check found, and refuses it unless it was signed here.

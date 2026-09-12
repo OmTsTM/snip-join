@@ -96,8 +96,11 @@ There is no telemetry, no crash reporting, no check at startup. Two things in
 the whole project reach the internet, and this is all of them:
 
 - **The update button, when pressed.** It requests
-  `https://api.github.com/repos/OmTsTM/snip-join/releases/latest`, and — only if
-  the user then presses download — one file from
+  `https://api.github.com/repos/OmTsTM/snip-join/releases/latest` and, only if
+  that request never leaves the machine, asks
+  `https://github.com/OmTsTM/snip-join/releases/latest` the same question —
+  some networks know the site and not its API. Then, only if the user presses
+  download, one file from
   `https://github.com/OmTsTM/snip-join/releases/download/…`. That prefix is
   checked in `application/update.rs` before a byte is fetched: the addresses
   arrive in a JSON document from the network, so they are untrusted input, and

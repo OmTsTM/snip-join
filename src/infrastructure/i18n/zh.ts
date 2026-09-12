@@ -230,6 +230,7 @@ export const zh: Catalogue = {
   'update.running': '当前运行的是 {version}。',
   'update.notes': '更新内容',
   'update.download': '下载（{size}）',
+  'update.downloadPlain': '下载',
   'update.downloading': '正在下载…',
   'update.install': '安装',
   'update.installNote': 'Snip Join 将会关闭，以便安装程序替换它。',

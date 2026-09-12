@@ -439,6 +439,17 @@ wrong one would leave two Snip Joins on the machine, one of them in the registry
 - **The renderer still has no HTTP capability.** `infrastructure/http.rs` is the
   only place in the application that touches the network, and it is reached from
   two commands.
+- **`api.github.com` and `github.com` are different names.** A machine can
+  reach one and not the other — a DNS filter, a security suite's web shield, a
+  network that allowlists hosts — so a check that fails to leave the machine
+  asks the releases page instead and reads the tag out of its redirect. The file
+  names are then built from this project's own release convention, which is safe
+  because a download that is not there fails as a download, and the signature
+  still has to check out either way.
+- **`reqwest::Error` hides the reason in its source chain.** Printing it alone
+  says "error sending request for url (…)" for a name server, a TLS stack and a
+  firewall alike, which are three problems with three answers. `because()` walks
+  the chain; the person reading the toast is the only one who can act on it.
 - **A download address out of a JSON document is untrusted input.** Every URL is
   checked against the project's own release downloads before a byte is fetched;
   without that, a tampered reply could have the application download anything

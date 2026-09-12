@@ -238,6 +238,7 @@ export const en = {
   'update.running': 'You are running {version}.',
   'update.notes': 'What changed',
   'update.download': 'Download ({size})',
+  'update.downloadPlain': 'Download',
   'update.downloading': 'Downloading…',
   'update.install': 'Install it',
   'update.installNote': 'Snip Join will close so the installer can replace it.',
