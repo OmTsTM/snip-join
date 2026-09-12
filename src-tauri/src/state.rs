@@ -7,30 +7,63 @@ use crate::domain::media::MediaSource;
 
 /// Process-wide editor state.
 ///
-/// Only two things genuinely need to be shared: the source currently open, and
-/// the set of cancellable jobs. Everything else about the edit lives in the
+/// Only two things genuinely need to be shared: what has been probed, and the
+/// set of cancellable jobs. Everything else about the edit lives in the
 /// renderer and arrives with each request, which keeps the two sides from
 /// drifting out of agreement about what the timeline looks like.
+///
+/// Media are keyed by path because a path already identifies a file uniquely
+/// and is what the asset protocol is granted against. Inventing an id would add
+/// a table to keep in step on both sides and buy nothing.
 #[derive(Default)]
 pub struct EditorState {
-    source: Mutex<Option<MediaSource>>,
+    media: Mutex<HashMap<String, MediaSource>>,
+    /// The first file opened. It decides the output format, and it is the one a
+    /// destination is suggested beside.
+    primary: Mutex<Option<String>>,
     jobs: Mutex<HashMap<String, watch::Sender<bool>>>,
 }
 
 impl EditorState {
-    pub fn set_source(&self, source: MediaSource) {
-        if let Ok(mut guard) = self.source.lock() {
-            *guard = Some(source);
+    /// Remembers a probed file. The first one to arrive becomes the primary.
+    pub fn register(&self, source: MediaSource) {
+        if let Ok(mut primary) = self.primary.lock() {
+            primary.get_or_insert_with(|| source.path.clone());
+        }
+        if let Ok(mut media) = self.media.lock() {
+            media.insert(source.path.clone(), source);
         }
     }
 
-    pub fn source(&self) -> Option<MediaSource> {
-        self.source.lock().ok().and_then(|guard| guard.clone())
+    pub fn media(&self, path: &str) -> Option<MediaSource> {
+        self.media.lock().ok().and_then(|guard| guard.get(path).cloned())
     }
 
-    pub fn clear_source(&self) {
-        if let Ok(mut guard) = self.source.lock() {
-            *guard = None;
+    pub fn primary(&self) -> Option<MediaSource> {
+        let path = self.primary.lock().ok().and_then(|guard| guard.clone())?;
+        self.media(&path)
+    }
+
+    /// Drops one file from the pool. The primary is only given up when the file
+    /// being dropped is it, so removing a later addition cannot change which
+    /// format the project exports in.
+    pub fn forget(&self, path: &str) {
+        if let Ok(mut media) = self.media.lock() {
+            media.remove(path);
+        }
+        if let Ok(mut primary) = self.primary.lock() {
+            if primary.as_deref() == Some(path) {
+                *primary = None;
+            }
+        }
+    }
+
+    pub fn forget_all(&self) {
+        if let Ok(mut media) = self.media.lock() {
+            media.clear();
+        }
+        if let Ok(mut primary) = self.primary.lock() {
+            *primary = None;
         }
     }
 

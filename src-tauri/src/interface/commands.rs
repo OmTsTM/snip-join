@@ -55,7 +55,7 @@ pub async fn open_media(
         .allow_file(&source.path)
         .map_err(|e| AppError::Internal(format!("the file could not be made readable: {e}")))?;
 
-    state.set_source(source.clone());
+    state.register(source.clone());
     Ok(source)
 }
 
@@ -71,9 +71,10 @@ pub async fn encoder_capabilities() -> AppResult<capabilities::Capabilities> {
 pub async fn prepare_preview(
     app: AppHandle,
     state: State<'_, EditorState>,
+    path: String,
     job_id: String,
 ) -> AppResult<PreviewSource> {
-    let source = current_source(&state)?;
+    let source = media_named(&state, &path)?;
 
     if !media_library::needs_proxy(&source) {
         return Ok(PreviewSource { path: source.path.clone(), is_proxy: false });
@@ -136,10 +137,11 @@ async fn build_proxy(
 pub async fn generate_thumbnails(
     app: AppHandle,
     state: State<'_, EditorState>,
+    path: String,
     count: usize,
     token: String,
 ) -> AppResult<()> {
-    let source = current_source(&state)?;
+    let source = media_named(&state, &path)?;
     if !source.has_video() {
         return Ok(());
     }
@@ -194,8 +196,11 @@ pub async fn generate_thumbnails(
 /// these and shows them, instead of silently moving the user's cut by up to a
 /// whole group of pictures.
 #[tauri::command]
-pub async fn keyframe_positions(state: State<'_, EditorState>) -> AppResult<KeyframeReport> {
-    let source = current_source(&state)?;
+pub async fn keyframe_positions(
+    state: State<'_, EditorState>,
+    path: String,
+) -> AppResult<KeyframeReport> {
+    let source = media_named(&state, &path)?;
     if !source.has_video() {
         return Ok(KeyframeReport { positions: vec![], truncated: false });
     }
@@ -210,7 +215,8 @@ pub async fn suggest_output_path(
     state: State<'_, EditorState>,
     extension: Option<String>,
 ) -> AppResult<String> {
-    let source = current_source(&state)?;
+    let source =
+        state.primary().ok_or_else(|| AppError::InvalidInput("no video is open".into()))?;
     let path = PathBuf::from(&source.path);
 
     let stem = path
@@ -234,13 +240,26 @@ pub async fn export_timeline(
     state: State<'_, EditorState>,
     request: ExportRequest,
 ) -> AppResult<ExportOutcome> {
-    let source = current_source(&state)?;
     let edit = request.edit_list()?;
-    let output = paths::validate_output(&request.output_path, std::path::Path::new(&source.path))?;
+
+    // Every file the timeline names has to have been opened through this
+    // application. Resolving them here rather than probing whatever path
+    // arrives keeps an export to files the user actually chose.
+    let media = request
+        .media
+        .iter()
+        .map(|path| media_named(&state, path))
+        .collect::<AppResult<Vec<_>>>()?;
+
+    // Checked against every input, not only the first: writing over any file
+    // being read truncates it halfway through the export.
+    let sources: Vec<std::path::PathBuf> =
+        media.iter().map(|source| std::path::PathBuf::from(&source.path)).collect();
+    let output = paths::validate_output(&request.output_path, &sources)?;
     let capabilities = capabilities::capabilities().await?;
 
     let plan = export_plan::plan(
-        &source,
+        &media,
         &edit,
         &request.spec,
         capabilities,
@@ -290,16 +309,23 @@ pub async fn cancel_job(state: State<'_, EditorState>, job_id: String) -> AppRes
     Ok(())
 }
 
-/// Forgets the open source and stops anything still running for it.
+/// Forgets every open file and stops anything still running for them.
 #[tauri::command]
 pub async fn close_media(state: State<'_, EditorState>) -> AppResult<()> {
     state.cancel_all();
-    state.clear_source();
+    state.forget_all();
     Ok(())
 }
 
-fn current_source(state: &State<'_, EditorState>) -> AppResult<MediaSource> {
-    state.source().ok_or_else(|| AppError::InvalidInput("no video is open".into()))
+/// Drops one file from the pool, leaving the rest of the project alone.
+#[tauri::command]
+pub async fn forget_media(state: State<'_, EditorState>, path: String) -> AppResult<()> {
+    state.forget(&path);
+    Ok(())
+}
+
+fn media_named(state: &State<'_, EditorState>, path: &str) -> AppResult<MediaSource> {
+    state.media(path).ok_or_else(|| AppError::InvalidInput("that file is not open".into()))
 }
 
 /// Awaits a set of futures concurrently.

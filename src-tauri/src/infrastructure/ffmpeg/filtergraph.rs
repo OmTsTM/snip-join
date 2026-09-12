@@ -10,7 +10,8 @@ pub const VIDEO_OUT: &str = "vout";
 pub const AUDIO_OUT: &str = "aout";
 
 /// Everything the graph builder needs that is not already in the edit list.
-#[derive(Debug, Clone, Copy)]
+// No longer `Copy`: the per-medium audio table is a Vec.
+#[derive(Debug, Clone)]
 pub struct GraphOptions {
     /// Frame rate every segment is normalised to. Concatenation requires a single
     /// rate across inputs, and synthesised gaps have no rate of their own.
@@ -23,12 +24,33 @@ pub struct GraphOptions {
     pub channels: u32,
     pub pixel_format: &'static str,
     pub include_audio: bool,
+    /// Whether each medium, in table order, carries an audio stream.
+    ///
+    /// A silent medium has no `[n:a]` pad to draw from, so its segment is given
+    /// the same generated silence a hole gets. Without this a single clip from
+    /// a file with no sound takes the whole graph down.
+    pub media_has_audio: Vec<bool>,
     pub upscale: UpscaleAlgorithm,
     pub scale: ScaleTarget,
     pub restoration: Restoration,
 }
 
 impl GraphOptions {
+    /// Derives graph options from the media table and a reconciled export spec.
+    ///
+    /// The first medium sets the output format. Everything else is normalised
+    /// onto it, which is the only way `concat` can be handed segments from
+    /// different files at all.
+    pub fn from_media(media: &[MediaSource], spec: &crate::domain::export::ExportSpec) -> Self {
+        let mut options = Self::from_source(&media[0], spec);
+        options.media_has_audio = media.iter().map(MediaSource::has_audio).collect();
+        // Any medium with sound is reason enough to carry an audio track: the
+        // silent ones contribute silence rather than dropping the track.
+        options.include_audio =
+            options.media_has_audio.iter().any(|has| *has) && spec.audio != AudioHandling::Remove;
+        options
+    }
+
     /// Derives graph options from a probed source and a reconciled export spec.
     pub fn from_source(source: &MediaSource, spec: &crate::domain::export::ExportSpec) -> Self {
         let video = source.video.as_ref();
@@ -46,6 +68,7 @@ impl GraphOptions {
             channels: source.audio.as_ref().map(|a| a.channels.clamp(1, 8)).unwrap_or(2),
             pixel_format: pixel_format_for(source, spec.codec),
             include_audio: source.has_audio() && spec.audio != AudioHandling::Remove,
+            media_has_audio: vec![source.has_audio()],
             upscale: spec.upscale,
             scale: spec.scale,
             restoration: spec.restoration,
@@ -99,8 +122,9 @@ pub fn build(edit: &EditList, options: &GraphOptions) -> String {
     for (index, segment) in segments.iter().enumerate() {
         match segment {
             Segment::Media(clip) => {
+                let input = clip.media;
                 chains.push(format!(
-                    "[0:v]{}[v{index}]",
+                    "[{input}:v]{}[v{index}]",
                     media_video_chain(
                         clip.source.start().seconds(),
                         clip.source.end().seconds(),
@@ -108,14 +132,23 @@ pub fn build(edit: &EditList, options: &GraphOptions) -> String {
                     )
                 ));
                 if options.include_audio {
-                    chains.push(format!(
-                        "[0:a]{}[a{index}]",
-                        media_audio_chain(
-                            clip.source.start().seconds(),
-                            clip.source.end().seconds(),
-                            options
-                        )
-                    ));
+                    // A medium with no sound of its own contributes silence of
+                    // the right length, exactly as a hole does.
+                    if options.media_has_audio.get(input).copied().unwrap_or(false) {
+                        chains.push(format!(
+                            "[{input}:a]{}[a{index}]",
+                            media_audio_chain(
+                                clip.source.start().seconds(),
+                                clip.source.end().seconds(),
+                                options
+                            )
+                        ));
+                    } else {
+                        chains.push(format!(
+                            "{}[a{index}]",
+                            gap_audio_chain(clip.source.duration(), options)
+                        ));
+                    }
                 }
             }
             Segment::Gap(range) => {
@@ -356,6 +389,7 @@ mod tests {
             channels: 2,
             pixel_format: "yuv420p",
             include_audio: true,
+            media_has_audio: vec![true, true],
             upscale: UpscaleAlgorithm::None,
             scale: ScaleTarget::Source,
             restoration: Restoration::default(),
@@ -373,10 +407,12 @@ mod tests {
     fn gapped_edit() -> EditList {
         EditList::new(vec![
             crate::domain::edl::Clip::new(
+                0,
                 TimeRange::from_seconds(0.0, 10.0).unwrap(),
                 Instant::ZERO,
             ),
             crate::domain::edl::Clip::new(
+                0,
                 TimeRange::from_seconds(20.0, 30.0).unwrap(),
                 Instant::new(20.0).unwrap(),
             ),
@@ -514,6 +550,54 @@ mod tests {
         assert_eq!(channel_layout(2), "stereo");
         assert_eq!(channel_layout(6), "5.1");
         assert_eq!(channel_layout(7), "stereo");
+    }
+
+    #[test]
+    fn a_second_medium_is_read_from_its_own_input() {
+        let edit = EditList::new(vec![
+            crate::domain::edl::Clip::new(
+                0,
+                TimeRange::from_seconds(0.0, 5.0).unwrap(),
+                Instant::ZERO,
+            ),
+            crate::domain::edl::Clip::new(
+                1,
+                TimeRange::from_seconds(0.0, 4.0).unwrap(),
+                Instant::new(5.0).unwrap(),
+            ),
+        ])
+        .unwrap();
+
+        let graph = build(&edit, &options());
+        assert!(graph.contains("[0:v]"), "the first piece reads the first file");
+        assert!(graph.contains("[1:v]"), "the second piece reads the second file");
+    }
+
+    /// A file with no sound has no `[n:a]` pad, and asking for one takes the
+    /// whole graph down rather than costing that one segment.
+    #[test]
+    fn a_silent_medium_contributes_silence_rather_than_a_missing_pad() {
+        let mut settings = options();
+        settings.media_has_audio = vec![true, false];
+
+        let edit = EditList::new(vec![
+            crate::domain::edl::Clip::new(
+                0,
+                TimeRange::from_seconds(0.0, 5.0).unwrap(),
+                Instant::ZERO,
+            ),
+            crate::domain::edl::Clip::new(
+                1,
+                TimeRange::from_seconds(0.0, 4.0).unwrap(),
+                Instant::new(5.0).unwrap(),
+            ),
+        ])
+        .unwrap();
+
+        let graph = build(&edit, &settings);
+        assert!(graph.contains("[0:a]"), "the first file has sound of its own");
+        assert!(!graph.contains("[1:a]"), "the second file has none to draw from");
+        assert!(graph.contains("anullsrc"), "so its segment is given silence");
     }
 
     #[test]

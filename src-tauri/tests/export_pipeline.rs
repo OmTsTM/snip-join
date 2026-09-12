@@ -85,6 +85,59 @@ async fn fixture() -> PathBuf {
     path
 }
 
+/// A second clip, in colours the first fixture never shows.
+///
+/// Yellow and magenta are what make the assertions meaningful: a frame taken
+/// from this file cannot be mistaken for one of the red, green or blue bands
+/// of the first, so the output proves both inputs were read.
+async fn second_fixture() -> PathBuf {
+    let path = workspace().join("second.mp4");
+    if path.exists() {
+        return path;
+    }
+
+    let tools = locator::tools().expect("FFmpeg must be installed to run these tests");
+    let filter = "color=c=yellow:s=320x180:r=30:d=6[a];                  color=c=magenta:s=320x180:r=30:d=6[b];                  [a][b]concat=n=2:v=1:a=0[v]";
+
+    let args: Vec<String> = [
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=stereo",
+        "-filter_complex",
+        filter,
+        "-map",
+        "[v]",
+        "-map",
+        "0:a",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-t",
+        "12",
+        &path.to_string_lossy(),
+    ]
+    .iter()
+    .map(|a| a.to_string())
+    .collect();
+
+    runner::run_capturing_stdout(&tools.ffmpeg, &args)
+        .await
+        .expect("the second fixture could not be produced");
+
+    path
+}
+
 /// Container duration of a produced file, in seconds.
 async fn duration_of(path: &Path) -> f64 {
     let tools = locator::tools().unwrap();
@@ -190,20 +243,23 @@ async fn probe_fixture() -> MediaSource {
 
 /// Plans and runs an export, returning the destination.
 async fn export(source: &MediaSource, edit: &EditList, spec: ExportSpec, name: &str) -> PathBuf {
+    export_media(std::slice::from_ref(source), edit, spec, name).await
+}
+
+/// The same, for a timeline that draws on more than one file.
+async fn export_media(
+    media: &[MediaSource],
+    edit: &EditList,
+    spec: ExportSpec,
+    name: &str,
+) -> PathBuf {
     let output = workspace().join(name);
     let _ = std::fs::remove_file(&output);
 
     let caps = capabilities::capabilities().await.expect("capabilities");
-    let plan = export_plan::plan(
-        source,
-        edit,
-        &spec,
-        caps,
-        &output,
-        &workspace(),
-        &format!("test-{name}"),
-    )
-    .expect("the export must plan");
+    let plan =
+        export_plan::plan(media, edit, &spec, caps, &output, &workspace(), &format!("test-{name}"))
+            .expect("the export must plan");
 
     let (_tx, rx) = tokio::sync::watch::channel(false);
     executor::run_plan(&plan, rx, |_| {})
@@ -252,8 +308,8 @@ async fn removing_the_middle_without_joining_leaves_a_black_silent_hole() {
 
     // The same removal, but the surviving pieces keep their original positions.
     let edit = EditList::new(vec![
-        Clip::new(TimeRange::from_seconds(0.0, 10.0).unwrap(), Instant::ZERO),
-        Clip::new(TimeRange::from_seconds(20.0, 30.0).unwrap(), Instant::new(20.0).unwrap()),
+        Clip::new(0, TimeRange::from_seconds(0.0, 10.0).unwrap(), Instant::ZERO),
+        Clip::new(0, TimeRange::from_seconds(20.0, 30.0).unwrap(), Instant::new(20.0).unwrap()),
     ])
     .unwrap();
 
@@ -379,7 +435,7 @@ async fn an_export_can_be_cancelled_and_leaves_no_scratch_behind() {
     let output = workspace().join("cancelled.mp4");
     let caps = capabilities::capabilities().await.expect("capabilities");
     let plan = export_plan::plan(
-        &source,
+        std::slice::from_ref(&source),
         &edit,
         &ExportSpec::fast(),
         caps,
@@ -457,4 +513,74 @@ async fn a_copy_reports_where_it_will_really_start() {
             "a cut between cut points has to resolve backwards, never forwards"
         );
     }
+}
+
+/// Two files on one timeline, which is the whole point of the media pool: the
+/// result has to contain both, in order, at the right lengths.
+#[tokio::test]
+async fn a_timeline_drawing_on_two_files_exports_both_of_them() {
+    let first = probe::probe(&fixture().await).await.expect("the first fixture must probe");
+    let second =
+        probe::probe(&second_fixture().await).await.expect("the second fixture must probe");
+
+    // Four seconds of the first file's red band, then four of the second's
+    // yellow one.
+    let edit = EditList::new(vec![
+        Clip::new(0, TimeRange::from_seconds(1.0, 5.0).unwrap(), Instant::ZERO),
+        Clip::new(1, TimeRange::from_seconds(1.0, 5.0).unwrap(), Instant::new(4.0).unwrap()),
+    ])
+    .unwrap();
+
+    let spec = ExportSpec {
+        mode: ExportMode::Precise,
+        quality: QualityTarget::Balanced,
+        ..ExportSpec::fast()
+    };
+
+    let output = export_media(&[first, second], &edit, spec, "two-files.mp4").await;
+
+    assert!((duration_of(&output).await - 8.0).abs() < 0.5, "eight seconds out of two files");
+    assert_eq!(dominant(colour_at(&output, 2.0).await), "red", "the first file's band comes first");
+
+    // Yellow is red and green together, which `dominant` calls neither. What
+    // matters is that it is not the first file's red, and that it is bright.
+    let (r, g, b) = colour_at(&output, 6.0).await;
+    assert!(
+        r > 150 && g > 150 && b < 90,
+        "the second file's yellow follows it, got ({r}, {g}, {b})"
+    );
+}
+
+/// A stream copy cannot join packets from two files, whatever their encodings
+/// look like. The planner has to notice and re-encode rather than produce a
+/// file containing only the first one.
+#[tokio::test]
+async fn asking_to_copy_a_two_file_timeline_re_encodes_instead() {
+    let first = probe::probe(&fixture().await).await.expect("the first fixture must probe");
+    let second =
+        probe::probe(&second_fixture().await).await.expect("the second fixture must probe");
+
+    let edit = EditList::new(vec![
+        Clip::new(0, TimeRange::from_seconds(0.0, 4.0).unwrap(), Instant::ZERO),
+        Clip::new(1, TimeRange::from_seconds(0.0, 4.0).unwrap(), Instant::new(4.0).unwrap()),
+    ])
+    .unwrap();
+
+    let caps = capabilities::capabilities().await.expect("capabilities");
+    let output = workspace().join("copy-refused.mp4");
+    let plan = export_plan::plan(
+        &[first, second],
+        &edit,
+        &ExportSpec::fast(),
+        caps,
+        &output,
+        &workspace(),
+        "test-copy-refused",
+    )
+    .expect("the export must plan");
+
+    assert!(
+        plan.effective_mode.re_encodes(),
+        "a copy was asked for and silently producing half the timeline would be worse"
+    );
 }

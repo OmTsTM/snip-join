@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 use super::error::{DomainError, DomainResult};
 use super::time::{Instant, TimeRange, EPSILON};
 
-/// One surviving piece of the source, placed at a position on the output
-/// timeline. `source` says which part of the original file to read; `timeline_start`
+/// One surviving piece of a medium, placed at a position on the output
+/// timeline. `source` says which part of that medium to read; `timeline_start`
 /// says where that part lands in the exported result.
 ///
 /// Keeping the two independent is what lets a block be dragged elsewhere without
@@ -12,13 +12,18 @@ use super::time::{Instant, TimeRange, EPSILON};
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Clip {
+    /// Which medium to read, as an index into the export request's media table.
+    ///
+    /// An index rather than a path: it keeps `Clip` cheap to copy, and it keeps
+    /// the domain free of any notion of a filesystem.
+    pub media: usize,
     pub source: TimeRange,
     pub timeline_start: Instant,
 }
 
 impl Clip {
-    pub fn new(source: TimeRange, timeline_start: Instant) -> Self {
-        Clip { source, timeline_start }
+    pub fn new(media: usize, source: TimeRange, timeline_start: Instant) -> Self {
+        Clip { media, source, timeline_start }
     }
 
     #[inline]
@@ -99,14 +104,14 @@ impl EditList {
         Ok(EditList { clips })
     }
 
-    /// Builds an edit list from clip durations alone, laying them end to end with
-    /// no gaps. This is the "join the ends" result.
+    /// Builds an edit list from ranges of one medium, laying them end to end
+    /// with no gaps. This is the "join the ends" result for a single file.
     pub fn contiguous(sources: Vec<TimeRange>) -> DomainResult<Self> {
         let mut cursor = 0.0;
         let clips = sources
             .into_iter()
             .map(|source| {
-                let clip = Clip::new(source, Instant::saturating(cursor));
+                let clip = Clip::new(0, source, Instant::saturating(cursor));
                 cursor += source.duration();
                 clip
             })
@@ -130,6 +135,21 @@ impl EditList {
     /// gaps. Trailing gaps cannot exist: the timeline ends with the last clip.
     pub fn duration(&self) -> f64 {
         self.clips.last().map(|clip| clip.timeline_end().seconds()).unwrap_or(0.0)
+    }
+
+    /// Whether the timeline reads from more than one medium.
+    ///
+    /// This decides an export as firmly as a hole does: pieces of two different
+    /// files cannot be concatenated as streams, whatever their codecs look like,
+    /// so a timeline that spans media has to be re-encoded.
+    pub fn spans_multiple_media(&self) -> bool {
+        let first = self.clips.first().map(|clip| clip.media);
+        self.clips.iter().any(|clip| Some(clip.media) != first)
+    }
+
+    /// The highest medium index any clip refers to, for validating a table.
+    pub fn highest_media_index(&self) -> usize {
+        self.clips.iter().map(|clip| clip.media).max().unwrap_or(0)
     }
 
     /// True when the clips run end to end with no holes between them.
@@ -195,10 +215,30 @@ mod tests {
     use super::*;
 
     fn clip(source_start: f64, source_end: f64, timeline_start: f64) -> Clip {
+        of_media(0, source_start, source_end, timeline_start)
+    }
+
+    fn of_media(media: usize, source_start: f64, source_end: f64, timeline_start: f64) -> Clip {
         Clip::new(
+            media,
             TimeRange::from_seconds(source_start, source_end).unwrap(),
             Instant::new(timeline_start).unwrap(),
         )
+    }
+
+    #[test]
+    fn one_medium_is_not_reported_as_several() {
+        let edl = EditList::new(vec![clip(0.0, 10.0, 0.0), clip(20.0, 30.0, 10.0)]).unwrap();
+        assert!(!edl.spans_multiple_media());
+    }
+
+    /// Pieces of two files cannot be concatenated as streams whatever their
+    /// codecs look like, so this is what makes such an export re-encode.
+    #[test]
+    fn a_second_medium_is_reported() {
+        let edl = EditList::new(vec![clip(0.0, 10.0, 0.0), of_media(1, 0.0, 5.0, 10.0)]).unwrap();
+        assert!(edl.spans_multiple_media());
+        assert_eq!(edl.highest_media_index(), 1);
     }
 
     #[test]

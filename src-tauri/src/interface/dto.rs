@@ -13,6 +13,9 @@ use crate::domain::time::{Instant, TimeRange};
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipDto {
+    /// Index into the request's media table.
+    #[serde(default)]
+    pub media: usize,
     pub source_start: f64,
     pub source_end: f64,
     pub timeline_start: f64,
@@ -22,7 +25,7 @@ impl ClipDto {
     fn into_clip(self) -> AppResult<Clip> {
         let source = TimeRange::from_seconds(self.source_start, self.source_end)?;
         let timeline_start = Instant::new(self.timeline_start)?;
-        Ok(Clip::new(source, timeline_start))
+        Ok(Clip::new(self.media, source, timeline_start))
     }
 }
 
@@ -32,6 +35,8 @@ impl ClipDto {
 pub struct ExportRequest {
     pub job_id: String,
     pub output_path: String,
+    /// Every medium the timeline reads from, in the order the clips index it.
+    pub media: Vec<String>,
     pub clips: Vec<ClipDto>,
     pub spec: ExportSpec,
 }
@@ -54,10 +59,27 @@ impl ExportRequest {
             ));
         }
 
+        if self.media.is_empty() {
+            return Err(AppError::InvalidInput("that export names no media".into()));
+        }
+        if self.media.len() > MAX_MEDIA {
+            return Err(AppError::InvalidInput("that timeline uses too many files".into()));
+        }
+
         let clips =
             self.clips.iter().cloned().map(ClipDto::into_clip).collect::<AppResult<Vec<_>>>()?;
+        let edit = EditList::new(clips)?;
 
-        Ok(EditList::new(clips)?)
+        // An index past the end of the table would otherwise reach the planner
+        // and panic there, so it is refused at the boundary like every other
+        // value arriving over IPC.
+        if edit.highest_media_index() >= self.media.len() {
+            return Err(AppError::InvalidInput(
+                "that export refers to a file it did not list".into(),
+            ));
+        }
+
+        Ok(edit)
     }
 }
 
@@ -66,6 +88,10 @@ impl ExportRequest {
 /// A stream-copy export spawns one process per piece, so an unbounded list would
 /// become a process-spawn loop. No real edit comes close to this.
 const MAX_CLIPS: usize = 512;
+
+/// How many distinct files one timeline may draw from. Each becomes an `-i`
+/// argument and an open file handle during the export.
+const MAX_MEDIA: usize = 64;
 
 /// Result of a finished export.
 #[derive(Debug, Clone, Serialize)]
@@ -128,6 +154,7 @@ mod tests {
         ExportRequest {
             job_id: "j".into(),
             output_path: "out.mp4".into(),
+            media: vec!["in.mp4".into()],
             clips,
             spec: ExportSpec::fast(),
         }
@@ -136,8 +163,8 @@ mod tests {
     #[test]
     fn a_valid_pair_of_clips_becomes_an_edit_list() {
         let edit = request(vec![
-            ClipDto { source_start: 0.0, source_end: 10.0, timeline_start: 0.0 },
-            ClipDto { source_start: 20.0, source_end: 30.0, timeline_start: 10.0 },
+            ClipDto { media: 0, source_start: 0.0, source_end: 10.0, timeline_start: 0.0 },
+            ClipDto { media: 0, source_start: 20.0, source_end: 30.0, timeline_start: 10.0 },
         ])
         .edit_list()
         .unwrap();
@@ -147,21 +174,45 @@ mod tests {
     }
 
     #[test]
+    fn a_clip_naming_an_unlisted_file_is_refused() {
+        let result = ExportRequest {
+            job_id: "j".into(),
+            output_path: "out.mp4".into(),
+            media: vec!["in.mp4".into()],
+            clips: vec![ClipDto {
+                media: 3,
+                source_start: 0.0,
+                source_end: 5.0,
+                timeline_start: 0.0,
+            }],
+            spec: ExportSpec::fast(),
+        }
+        .edit_list();
+
+        assert!(matches!(result.unwrap_err(), AppError::InvalidInput(_)));
+    }
+
+    #[test]
     fn an_empty_timeline_is_refused() {
         assert!(request(vec![]).edit_list().is_err());
     }
 
     #[test]
     fn a_backwards_clip_is_refused() {
-        let result =
-            request(vec![ClipDto { source_start: 10.0, source_end: 5.0, timeline_start: 0.0 }])
-                .edit_list();
+        let result = request(vec![ClipDto {
+            media: 0,
+            source_start: 10.0,
+            source_end: 5.0,
+            timeline_start: 0.0,
+        }])
+        .edit_list();
         assert!(result.is_err());
     }
 
     #[test]
     fn a_non_finite_value_is_refused() {
         let result = request(vec![ClipDto {
+            media: 0,
             source_start: 0.0,
             source_end: f64::INFINITY,
             timeline_start: 0.0,
@@ -172,9 +223,13 @@ mod tests {
 
     #[test]
     fn a_negative_position_is_refused() {
-        let result =
-            request(vec![ClipDto { source_start: 0.0, source_end: 5.0, timeline_start: -1.0 }])
-                .edit_list();
+        let result = request(vec![ClipDto {
+            media: 0,
+            source_start: 0.0,
+            source_end: 5.0,
+            timeline_start: -1.0,
+        }])
+        .edit_list();
         assert!(result.is_err());
     }
 
@@ -182,6 +237,7 @@ mod tests {
     fn an_absurd_number_of_clips_is_refused_before_spawning_anything() {
         let clips = (0..MAX_CLIPS + 1)
             .map(|i| ClipDto {
+                media: 0,
                 source_start: i as f64,
                 source_end: i as f64 + 0.5,
                 timeline_start: i as f64,

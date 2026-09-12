@@ -43,7 +43,7 @@ pub fn validate_input(raw: &str) -> AppResult<PathBuf> {
 /// Refusing to write over the source is the important part. FFmpeg would open
 /// the input for reading and truncate the same file for writing, destroying the
 /// original a few frames into the export with no way back.
-pub fn validate_output(raw: &str, source: &Path) -> AppResult<PathBuf> {
+pub fn validate_output(raw: &str, sources: &[PathBuf]) -> AppResult<PathBuf> {
     if raw.trim().is_empty() {
         return Err(AppError::InvalidInput("no destination was given".into()));
     }
@@ -69,7 +69,10 @@ pub fn validate_output(raw: &str, source: &Path) -> AppResult<PathBuf> {
         .ok_or_else(|| AppError::InvalidInput("that destination has no file name".into()))?;
     let resolved = canonical_parent.join(file_name);
 
-    if paths_equal(&resolved, source) {
+    // Every input, not only the first: a timeline can now read from several
+    // files, and writing over any one of them truncates it while it is still
+    // being read.
+    if sources.iter().any(|source| paths_equal(&resolved, source)) {
         return Err(AppError::InvalidInput(
             "choose a different file: exporting over the original would destroy it".into(),
         ));
@@ -156,8 +159,28 @@ mod tests {
     fn an_output_without_an_extension_is_refused() {
         let dir = std::env::temp_dir();
         let destination = dir.join("result");
-        let result = validate_output(&destination.to_string_lossy(), Path::new("C:/in.mp4"));
+        let result = validate_output(&destination.to_string_lossy(), &[PathBuf::from("C:/in.mp4")]);
         assert!(matches!(result, Err(AppError::InvalidInput(_))));
+    }
+
+    /// With several inputs the guard has to cover all of them: the export reads
+    /// every file for its whole length.
+    #[test]
+    fn writing_over_any_input_is_refused() {
+        let dir = dunce::canonicalize(std::env::temp_dir()).unwrap();
+        let first = dir.join("snipjoin-guard-first.mp4");
+        let second = dir.join("snipjoin-guard-second.mp4");
+        std::fs::write(&first, b"x").unwrap();
+        std::fs::write(&second, b"x").unwrap();
+
+        let result = validate_output(&second.to_string_lossy(), &[first.clone(), second.clone()]);
+        std::fs::remove_file(&first).ok();
+        std::fs::remove_file(&second).ok();
+
+        assert!(
+            matches!(result, Err(AppError::InvalidInput(message)) if message.contains("destroy")),
+            "the second input is read for just as long as the first"
+        );
     }
 
     #[test]
@@ -166,7 +189,7 @@ mod tests {
         let source = dir.join("snipjoin-guard-test.mp4");
         std::fs::write(&source, b"x").unwrap();
 
-        let result = validate_output(&source.to_string_lossy(), &source);
+        let result = validate_output(&source.to_string_lossy(), std::slice::from_ref(&source));
         std::fs::remove_file(&source).ok();
 
         assert!(
@@ -181,13 +204,13 @@ mod tests {
         let source = dir.join("snipjoin-source-test.mp4");
         let destination = dir.join("snipjoin-result-test.mp4");
 
-        let result = validate_output(&destination.to_string_lossy(), &source);
+        let result = validate_output(&destination.to_string_lossy(), std::slice::from_ref(&source));
         assert!(result.is_ok(), "{result:?}");
     }
 
     #[test]
     fn a_destination_in_a_missing_folder_is_refused() {
-        let result = validate_output("C:/no/such/folder/out.mp4", Path::new("C:/in.mp4"));
+        let result = validate_output("C:/no/such/folder/out.mp4", &[PathBuf::from("C:/in.mp4")]);
         assert!(matches!(result, Err(AppError::InvalidInput(_))));
     }
 }

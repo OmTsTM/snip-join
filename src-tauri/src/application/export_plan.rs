@@ -54,7 +54,7 @@ impl ExportPlan {
 /// stitched. It is passed in rather than read from the environment so tests can
 /// assert on the generated paths.
 pub fn plan(
-    source: &MediaSource,
+    media: &[MediaSource],
     edit: &EditList,
     spec: &ExportSpec,
     capabilities: &Capabilities,
@@ -65,20 +65,26 @@ pub fn plan(
     if edit.is_empty() {
         return Err(AppError::Domain(crate::domain::error::DomainError::EmptyEdit));
     }
-    if source.video.is_none() && source.audio.is_none() {
+    let Some(first) = media.first() else {
+        return Err(AppError::UnsupportedMedia);
+    };
+    if media.iter().all(|source| source.video.is_none() && source.audio.is_none()) {
         return Err(AppError::UnsupportedMedia);
     }
 
-    // The spec is reconciled against the edit before anything is built: a hole in
-    // the timeline makes a stream copy impossible, and silently producing a file
-    // without the hole would be the worst outcome of the three.
-    let spec = spec.clone().reconciled(!edit.is_contiguous());
+    // The spec is reconciled against the edit before anything is built. Two
+    // things rule out a stream copy: a hole, which has to be drawn, and a
+    // timeline drawing on more than one file, whose packets cannot be
+    // concatenated however alike the two encodings look. Producing a file with
+    // the hole missing, or with only the first file in it, would be the worst
+    // outcome available.
+    let spec = spec.clone().reconciled(!edit.is_contiguous() || edit.spans_multiple_media());
     let output_duration = edit.duration();
 
     if spec.mode.re_encodes() {
         return Ok(ExportPlan {
             steps: vec![ExportStep {
-                args: transcoder::precise_export_args(source, edit, &spec, capabilities, output),
+                args: transcoder::precise_export_args(media, edit, &spec, capabilities, output),
                 weight: output_duration,
                 reported_duration: output_duration,
             }],
@@ -98,7 +104,7 @@ pub fn plan(
         return Ok(ExportPlan {
             steps: vec![ExportStep {
                 args: transcoder::copy_segment_args(
-                    &source.path,
+                    &first.path,
                     clip.source.start().seconds(),
                     clip.duration(),
                     output,
@@ -127,7 +133,7 @@ pub fn plan(
         let part = temp_dir.join(format!("part-{index:04}.{extension}"));
         steps.push(ExportStep {
             args: transcoder::copy_segment_args(
-                &source.path,
+                &first.path,
                 clip.source.start().seconds(),
                 clip.duration(),
                 &part,
@@ -217,15 +223,15 @@ mod tests {
 
     fn gapped() -> EditList {
         EditList::new(vec![
-            Clip::new(TimeRange::from_seconds(0.0, 10.0).unwrap(), Instant::ZERO),
-            Clip::new(TimeRange::from_seconds(20.0, 30.0).unwrap(), Instant::new(20.0).unwrap()),
+            Clip::new(0, TimeRange::from_seconds(0.0, 10.0).unwrap(), Instant::ZERO),
+            Clip::new(0, TimeRange::from_seconds(20.0, 30.0).unwrap(), Instant::new(20.0).unwrap()),
         ])
         .unwrap()
     }
 
     fn make_plan(edit: &EditList, spec: ExportSpec) -> ExportPlan {
         plan(
-            &source(),
+            std::slice::from_ref(&source()),
             edit,
             &spec,
             &capabilities(),
@@ -264,7 +270,7 @@ mod tests {
     #[test]
     fn scratch_segments_keep_the_destination_extension() {
         let plan = plan(
-            &source(),
+            std::slice::from_ref(&source()),
             &joined(),
             &ExportSpec::fast(),
             &capabilities(),
@@ -326,7 +332,7 @@ mod tests {
     #[test]
     fn an_empty_edit_is_refused_before_anything_is_built() {
         let result = plan(
-            &source(),
+            std::slice::from_ref(&source()),
             &EditList::contiguous(vec![TimeRange::from_seconds(0.0, 1.0).unwrap()]).unwrap(),
             &ExportSpec::fast(),
             &capabilities(),
@@ -341,7 +347,7 @@ mod tests {
     fn each_job_gets_its_own_scratch_directory() {
         let a = make_plan(&joined(), ExportSpec::fast());
         let b = plan(
-            &source(),
+            std::slice::from_ref(&source()),
             &joined(),
             &ExportSpec::fast(),
             &capabilities(),

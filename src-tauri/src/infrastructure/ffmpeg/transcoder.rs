@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::domain::edl::EditList;
-use crate::domain::export::{AudioHandling, ExportSpec, VideoCodec};
+use crate::domain::export::{ExportSpec, VideoCodec};
 use crate::domain::media::MediaSource;
 
 use super::capabilities::Capabilities;
@@ -19,18 +19,22 @@ const PROXY_MAX_EDGE: u32 = 1280;
 /// Arguments are returned rather than executed so the whole command can be unit
 /// tested without touching a disk or spawning a process.
 pub fn precise_export_args(
-    source: &MediaSource,
+    media: &[MediaSource],
     edit: &EditList,
     spec: &ExportSpec,
     capabilities: &Capabilities,
     output: &Path,
 ) -> Vec<String> {
-    let options = GraphOptions::from_source(source, spec);
+    let options = GraphOptions::from_media(media, spec);
     let graph = filtergraph::build(edit, &options);
     let encoder = capabilities.resolve_encoder(spec.codec, spec.backend);
 
     let mut args = base_args();
-    args.extend(["-i".into(), source.path.clone()]);
+    // One input per medium, in table order: a clip's `media` index is its
+    // input index in the graph, so the two lists must not be reordered apart.
+    for source in media {
+        args.extend(["-i".into(), source.path.clone()]);
+    }
     args.extend(["-filter_complex".into(), graph]);
     args.extend(["-map".into(), format!("[{VIDEO_OUT}]")]);
 
@@ -52,12 +56,14 @@ pub fn precise_export_args(
 
     if options.include_audio {
         args.extend(["-c:a".into(), "aac".into()]);
+        // The first medium sets the output format, so its bit rate is the one
+        // worth matching.
         let bitrate = encoding::audio_bitrate(
-            source.audio.as_ref().and_then(|a| a.bit_rate),
+            media[0].audio.as_ref().and_then(|a| a.bit_rate),
             options.channels,
         );
         args.extend(["-b:a".into(), bitrate.to_string()]);
-    } else if spec.audio == AudioHandling::Remove || !source.has_audio() {
+    } else {
         args.push("-an".into());
     }
 
@@ -301,7 +307,7 @@ mod tests {
     #[test]
     fn the_input_path_is_one_argument_and_is_never_quoted() {
         let args = precise_export_args(
-            &source(true),
+            std::slice::from_ref(&source(true)),
             &edit(),
             &spec(),
             &capabilities(),
@@ -317,7 +323,7 @@ mod tests {
     #[test]
     fn a_re_encoding_export_maps_the_graph_outputs() {
         let args = precise_export_args(
-            &source(true),
+            std::slice::from_ref(&source(true)),
             &edit(),
             &spec(),
             &capabilities(),
@@ -332,7 +338,7 @@ mod tests {
     #[test]
     fn a_silent_source_gets_no_audio_stream() {
         let args = precise_export_args(
-            &source(false),
+            std::slice::from_ref(&source(false)),
             &edit(),
             &spec(),
             &capabilities(),
@@ -345,7 +351,7 @@ mod tests {
     #[test]
     fn stale_rotation_metadata_is_cleared_after_baking_it_in() {
         let args = precise_export_args(
-            &source(true),
+            std::slice::from_ref(&source(true)),
             &edit(),
             &spec(),
             &capabilities(),
