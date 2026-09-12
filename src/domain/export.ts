@@ -74,8 +74,14 @@ export function fastSpec(): ExportSpec {
  * this in the interface is better than letting the backend promote the mode
  * silently and leaving the user wondering why a copy took four minutes.
  */
-export function canCopyStreams(spec: ExportSpec, hasGaps: boolean): boolean {
-  return !hasGaps && spec.upscale === 'none' && isRestorationOff(spec.restoration)
+export function canCopyStreams(
+  spec: ExportSpec,
+  hasGaps: boolean,
+  spansMedia: boolean,
+): boolean {
+  // Two files cannot be copied into one stream however alike their encodings
+  // look, which puts a second file in the same category as a hole.
+  return !hasGaps && !spansMedia && spec.upscale === 'none' && isRestorationOff(spec.restoration)
 }
 
 export function isRestorationOff(restoration: Restoration): boolean {

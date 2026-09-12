@@ -22,12 +22,22 @@ import { Playhead } from './Playhead'
 import { Ruler, RULER_HEIGHT } from './Ruler'
 import { SelectionRails } from './SelectionRails'
 import { StripLoading } from './StripLoading'
+import type { Thumbnail } from '@presentation/state/editorStore'
 
 /** Vertical offset of the block track inside the canvas. */
 const TRACK_TOP = RULER_HEIGHT + TRACK_GAP
 
 /** Movement, in pixels, before a press is treated as a drag rather than a click. */
 const DRAG_THRESHOLD = 3
+
+/**
+ * One shared empty list.
+ *
+ * A fresh `[]` per render for a medium whose frames have not landed yet would
+ * be a new reference every time, which defeats the memo on the block card and
+ * re-renders every strip on the timeline sixty times a second.
+ */
+const EMPTY_FRAMES: readonly Thumbnail[] = []
 
 export function TimelineDock() {
   const t = useT()
@@ -45,10 +55,10 @@ export function TimelineDock() {
   const keyframes = useEditor((state) => state.keyframes)
   const snapToCutPoint = useEditor((state) => state.snapToCutPoint)
   const phase = useEditor((state) => state.phase)
-  const framesPending = useEditor((state) => state.framesPending)
+  const pendingFrames = useEditor((state) => state.pendingFrames)
   // Covered from the moment a file is being prepared until the last frame has
   // landed, which is the whole stretch where the strip is visibly changing.
-  const stripLoading = phase !== 'empty' && (phase !== 'ready' || framesPending)
+  const stripLoading = phase !== 'empty' && (phase !== 'ready' || pendingFrames > 0)
   const snapToCutPoints = useEditor((state) => state.snapToCutPoints)
   const setSnapToCutPoints = useEditor((state) => state.setSnapToCutPoints)
   const dockHeight = useEditor((state) => state.timelineHeight)
@@ -303,7 +313,7 @@ export function TimelineDock() {
                 timeline={timeline}
                 pixelsPerSecond={pixelsPerSecond}
                 sourceDuration={sourceDuration}
-                thumbnails={thumbnails}
+                thumbnails={thumbnails[block.mediaId] ?? EMPTY_FRAMES}
                 height={blockHeight}
                 dragging={draggingBlock === block.id}
                 onDragStateChange={setDraggingBlock}

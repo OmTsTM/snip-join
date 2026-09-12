@@ -19,9 +19,12 @@ import {
 } from '@presentation/features/timeline/dockSize'
 import { clamp, snapToFrame, span, type Span } from '@domain/time'
 import {
+  appendMedium,
   blockAt,
+  mediaAt,
   createTimeline,
   isolateSpan,
+  mediaOrder,
   keptDuration,
   moveBlock as moveBlockIn,
   removeBlock as removeBlockIn,
@@ -30,6 +33,7 @@ import {
   splitAt,
   totalDuration,
   trimBlock as trimBlockIn,
+  withBlocks,
   type BlockId,
   type Timeline,
   type TimelineMode,
@@ -68,10 +72,18 @@ export interface ExportJob {
 
 interface EditorState {
   phase: Phase
+  /**
+   * Every file the project has open, in the order they were added.
+   *
+   * The first one is the project's own: it decides the output format and is
+   * what a destination is suggested beside.
+   */
+  media: readonly MediaSourceInfo[]
   source: MediaSourceInfo | null
-  /** Asset URL the video element loads, already converted for the web view. */
-  previewUrl: string | null
-  isProxy: boolean
+  /** Asset URL each medium's preview loads, keyed by path. */
+  previewUrls: Readonly<Record<string, string>>
+  /** Which media are being previewed through a generated proxy. */
+  proxies: Readonly<Record<string, boolean>>
   proxyProgress: number
   capabilities: Capabilities | null
 
@@ -84,18 +96,26 @@ interface EditorState {
   muted: boolean
   /** Timeline scale, in pixels per second. */
   pixelsPerSecond: number
-  thumbnails: readonly Thumbnail[]
+  /** Filmstrip frames per medium, keyed by path. */
+  thumbnails: Readonly<Record<string, readonly Thumbnail[]>>
   /**
-   * Whether frames are still arriving.
+   * How many media are still having their frames read.
    *
-   * Taken from the command settling rather than from a count: a frame that
-   * cannot be decoded is skipped, so the strip can legitimately end up shorter
-   * than what was asked for, and a count would leave the veil up forever.
+   * A count rather than a flag because two files can be read at once, and the
+   * first to finish must not clear the second's veil. Completion comes from the
+   * command settling rather than from counting frames against what was asked
+   * for: a frame that cannot be decoded is skipped on purpose, so a strip can
+   * legitimately come up short and the veil would never lift.
    */
-  framesPending: boolean
+  pendingFrames: number
 
   /**
-   * Positions a stream copy can cut at.
+   * Positions a stream copy can cut at, for the first medium.
+   *
+   * Only the first: a timeline reading from several files cannot be copied at
+   * all, so cut points for the others would describe an export that is not on
+   * offer. The export dialog says as much rather than showing positions that
+   * cannot be honoured.
    *
    * Held here rather than derived because reading them costs a process launch,
    * and because both the timeline and the export dialog need the same answer.
@@ -135,6 +155,8 @@ interface EditorState {
   mediaToken: string
 
   openFile: (path: string) => Promise<void>
+  addMedia: (path: string) => Promise<void>
+  removeMedium: (mediaId: string) => Promise<void>
   closeFile: () => Promise<void>
 
   setSelection: (selection: Span | null) => void
@@ -235,8 +257,42 @@ function remember(key: string, value: string): void {
   }
 }
 
+/**
+ * Builds and registers the preview for one medium.
+ *
+ * Proxy generation is the slow part of opening a file, which is why the first
+ * one is awaited before the editor calls itself ready. A file added later is
+ * not waited for: the timeline works without its picture.
+ */
+async function loadPreview(source: MediaSourceInfo, token: string): Promise<void> {
+  try {
+    const preview = await api.preparePreview(source.path, token)
+    if (useEditor.getState().mediaToken !== token) return
+    useEditor.setState((state) => ({
+      previewUrls: { ...state.previewUrls, [source.path]: convertFileSrc(preview.path) },
+      proxies: { ...state.proxies, [source.path]: preview.isProxy },
+    }))
+  } catch {
+    // A preview that cannot be built leaves the picture black; the edit itself
+    // is unaffected, and the export reads the original file either way.
+  }
+}
+
+/** Starts filling one medium's filmstrip. The frames arrive as events. */
+function loadFrames(source: MediaSourceInfo, token: string): void {
+  useEditor.setState((state) => ({ pendingFrames: state.pendingFrames + 1 }))
+  void api
+    .generateThumbnails(source.path, THUMBNAIL_COUNT, token)
+    .catch(() => undefined)
+    .finally(() => {
+      useEditor.setState((state) => ({
+        pendingFrames: Math.max(0, state.pendingFrames - 1),
+      }))
+    })
+}
+
 /** The timeline before anything is open, so selectors never see null. */
-const EMPTY_TIMELINE = createTimeline(0, 'join')
+const EMPTY_TIMELINE = createTimeline('', 0, 'join')
 
 /**
  * Guards a gesture so a continuous drag collapses into one undo step.
@@ -249,9 +305,10 @@ let gestureOpen = false
 
 export const useEditor = create<EditorState>((set, get) => ({
   phase: 'empty',
+  media: [],
   source: null,
-  previewUrl: null,
-  isProxy: false,
+  previewUrls: {},
+  proxies: {},
   proxyProgress: 0,
   capabilities: null,
 
@@ -262,8 +319,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   volume: readStoredVolume(),
   muted: readStoredMuted(),
   pixelsPerSecond: 40,
-  thumbnails: [],
-  framesPending: false,
+  thumbnails: {},
+  pendingFrames: 0,
   keyframes: [],
   keyframesTruncated: false,
   snapToCutPoints: true,
@@ -279,8 +336,10 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({
       phase: 'opening',
       error: null,
-      thumbnails: [],
-      framesPending: true,
+      media: [],
+      previewUrls: {},
+      proxies: {},
+      thumbnails: {},
       lastExport: null,
       mediaToken: token,
     })
@@ -290,15 +349,15 @@ export const useEditor = create<EditorState>((set, get) => ({
       if (get().mediaToken !== token) return
 
       set({
+        media: [source],
         source,
         phase: 'preparing',
-        history: createHistory(createTimeline(source.duration, 'join')),
+        history: createHistory(createTimeline(source.path, source.duration, 'join')),
         selection: null,
         keyframes: [],
         keyframesTruncated: false,
         playhead: 0,
         playing: false,
-        isProxy: source.playability === 'needsProxy',
         proxyProgress: 0,
       })
 
@@ -309,32 +368,18 @@ export const useEditor = create<EditorState>((set, get) => ({
         .then((capabilities) => set({ capabilities }))
         .catch(() => undefined)
 
-      const preview = await api.preparePreview(token)
+      await loadPreview(source, token)
       if (get().mediaToken !== token) return
+      set({ phase: 'ready' })
 
-      set({
-        previewUrl: convertFileSrc(preview.path),
-        isProxy: preview.isProxy,
-        phase: 'ready',
-      })
-
-      // The filmstrip fills in progressively through events, so this is not
-      // awaited: the editor is usable the moment the preview is ready. What is
-      // tracked is when the last frame has landed, so the strip can say it is
-      // still filling instead of just flickering.
-      void api
-        .generateThumbnails(THUMBNAIL_COUNT, token)
-        .catch(() => undefined)
-        .finally(() => {
-          if (get().mediaToken !== token) return
-          set({ framesPending: false })
-        })
+      loadFrames(source, token)
 
       // Cut points decide whether a copy is exact, so they are read as soon as
       // the editor is usable. Not awaited: the timeline works without them and
-      // simply gains snapping when they land.
+      // simply gains snapping when they land. Only for the first file: a
+      // timeline spanning several cannot be copied at all.
       void api
-        .keyframes()
+        .keyframes(source.path)
         .then((report) => {
           if (get().mediaToken !== token) return
           set({ keyframes: report.positions, keyframesTruncated: report.truncated })
@@ -342,25 +387,98 @@ export const useEditor = create<EditorState>((set, get) => ({
         .catch(() => undefined)
     } catch (error) {
       if (get().mediaToken !== token) return
-      set({ phase: 'empty', source: null, previewUrl: null, framesPending: false })
+      set({ phase: 'empty', source: null, media: [] })
       get().reportError(error)
     }
+  },
+
+  /**
+   * Adds another file and puts the whole of it after everything already there.
+   *
+   * Appended rather than placed: where it belongs is the user's business, and
+   * every gesture for moving a block already exists.
+   */
+  async addMedia(path) {
+    const { mediaToken: token, phase } = get()
+    if (phase === 'empty') {
+      await get().openFile(path)
+      return
+    }
+
+    try {
+      const source = await api.openMedia(path)
+      if (get().mediaToken !== token) return
+
+      // The same file twice is a reasonable thing to want — the same shot used
+      // at the start and again at the end — so it earns a second block without
+      // a second entry in the pool or a second read of its frames.
+      const known = get().media.some((medium) => medium.path === source.path)
+
+      set((state) => ({
+        media: known ? state.media : [...state.media, source],
+        history: record(
+          state.history,
+          appendMedium(state.history.present, source.path, source.duration),
+        ),
+      }))
+
+      if (known) return
+
+        await loadPreview(source, token)
+      loadFrames(source, token)
+    } catch (error) {
+      if (get().mediaToken !== token) return
+      get().reportError(error)
+    }
+  },
+
+  /**
+   * Drops a file and everything on the timeline that reads from it.
+   *
+   * The first medium cannot be dropped: it decides the output format, and
+   * losing it halfway through an edit would silently change what every other
+   * piece is normalised to.
+   */
+  async removeMedium(mediaId) {
+    const { media, history } = get()
+    if (media[0]?.path === mediaId) return
+
+    const blocks = history.present.blocks.filter((block) => block.mediaId !== mediaId)
+    set((state) => {
+      const previewUrls = { ...state.previewUrls }
+      const proxies = { ...state.proxies }
+      const thumbnails = { ...state.thumbnails }
+      delete previewUrls[mediaId]
+      delete proxies[mediaId]
+      delete thumbnails[mediaId]
+
+      return {
+        media: state.media.filter((medium) => medium.path !== mediaId),
+        previewUrls,
+        proxies,
+        thumbnails,
+        history: record(state.history, withBlocks(state.history.present, blocks)),
+      }
+    })
+
+    await api.forgetMedia(mediaId).catch(() => undefined)
   },
 
   async closeFile() {
     await api.closeMedia().catch(() => undefined)
     set({
       phase: 'empty',
+      media: [],
       source: null,
-      previewUrl: null,
-      isProxy: false,
+      previewUrls: {},
+      proxies: {},
       proxyProgress: 0,
       history: createHistory(EMPTY_TIMELINE),
       selection: null,
       playhead: 0,
       playing: false,
-      thumbnails: [],
-      framesPending: false,
+      thumbnails: {},
+      pendingFrames: 0,
       keyframes: [],
       keyframesTruncated: false,
       exportJob: null,
@@ -565,7 +683,12 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (!source) return
 
     const jobId = crypto.randomUUID()
+
+    // The table and the indices are built together, so a clip can never name a
+    // file the request did not list.
+    const media = mediaOrder(history.present)
     const clips = history.present.blocks.map((block) => ({
+      media: Math.max(0, media.indexOf(block.mediaId)),
       sourceStart: block.source.start,
       sourceEnd: block.source.end,
       timelineStart: block.start,
@@ -574,7 +697,13 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ exportJob: { jobId, progress: 0, destination }, error: null, lastExport: null })
 
     try {
-      const outcome = await api.exportTimeline({ jobId, outputPath: destination, clips, spec })
+      const outcome = await api.exportTimeline({
+        jobId,
+        outputPath: destination,
+        media,
+        clips,
+        spec,
+      })
       set({ exportJob: null, lastExport: outcome })
     } catch (error) {
       set({ exportJob: null })
@@ -622,11 +751,12 @@ export function connectBackendEvents(): () => void {
         // in the filmstrip of the one that replaced it.
         if (payload.token !== state.mediaToken) return {}
 
-        // Frames arrive out of order across the worker window, so the strip is
-        // kept sorted by position rather than by arrival.
-        const next = [...state.thumbnails, { at: payload.at, dataUrl: payload.dataUrl }]
+        // Frames arrive out of order across the worker window, so each strip
+        // is kept sorted by position rather than by arrival.
+        const existing = state.thumbnails[payload.media] ?? []
+        const next = [...existing, { at: payload.at, dataUrl: payload.dataUrl }]
         next.sort((a, b) => a.at - b.at)
-        return { thumbnails: next }
+        return { thumbnails: { ...state.thumbnails, [payload.media]: next } }
       })
     }),
 
@@ -657,6 +787,26 @@ export const selectCanUndo = (state: EditorState): boolean => canUndo(state.hist
 export const selectCanRedo = (state: EditorState): boolean => canRedo(state.history)
 export const selectBlockAtPlayhead = (state: EditorState) =>
   blockAt(state.history.present, state.playhead)
+
+/**
+ * The file the preview should be showing, and what it should load for it.
+ *
+ * All three return primitives, which is what makes them safe to derive on
+ * every call: identity comparison on a string or a boolean is comparison by
+ * value.
+ */
+export const selectActiveMedia = (state: EditorState): string | null =>
+  mediaAt(state.history.present, state.playhead)
+
+export const selectPreviewUrl = (state: EditorState): string | null => {
+  const media = selectActiveMedia(state)
+  return media === null ? null : (state.previewUrls[media] ?? null)
+}
+
+export const selectIsProxy = (state: EditorState): boolean => {
+  const media = selectActiveMedia(state)
+  return media === null ? false : (state.proxies[media] ?? false)
+}
 
 /**
  * Selectors must return a value that is reference-stable between renders.

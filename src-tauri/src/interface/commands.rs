@@ -176,6 +176,7 @@ pub async fn generate_thumbnails(
                 events::THUMBNAIL_READY,
                 ThumbnailDto {
                     token: token.clone(),
+                    media: source.path.clone(),
                     index: position_index,
                     at: thumbnail.at,
                     data_url: thumbnail.data_url,

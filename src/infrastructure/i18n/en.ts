@@ -59,6 +59,12 @@ export const en = {
   'join.on': 'What is left closes up into one continuous video.',
   'join.off': 'The hole stays. It exports as black with silence.',
 
+  'media.title': 'Media',
+  'media.add': 'Add a video',
+  'media.append': 'Put it on the timeline again',
+  'media.remove': 'Remove from the project',
+  'media.first': 'Sets the format everything else is matched to',
+
   'blocks.title': 'Blocks',
   'blocks.one': '1 block',
   'blocks.many': '{count} blocks',
@@ -101,6 +107,7 @@ export const en = {
   'export.mode.enhanced.detail':
     'Precise, plus upscaling and restoration. This is the slow one: expect several times the length of the video.',
   'export.mode.forced': 'A hole cannot be copied, so this export re-encodes.',
+  'export.mode.forcedByFiles': 'More than one file cannot be copied, so this export re-encodes.',
 
   'export.lossless.exact': 'Exact cuts. Nothing is re-encoded.',
   'export.lossless.shift': 'Cuts move back up to {shift} to reach the nearest cut point.',

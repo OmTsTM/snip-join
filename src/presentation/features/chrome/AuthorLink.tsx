@@ -10,7 +10,7 @@ import { useT } from '@presentation/i18n/I18nProvider'
  * `src-tauri/capabilities/default.json` is scoped to exactly this URL, so the
  * renderer cannot be talked into opening anything else.
  */
-const AUTHOR_URL = 'https://x.com/omtstm'
+const AUTHOR_URL = 'https://ko-fi.com/omtstm'
 
 /**
  * A credit line that admits to being a link.

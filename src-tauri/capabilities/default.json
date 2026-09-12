@@ -17,7 +17,7 @@
     "opener:allow-reveal-item-in-dir",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://x.com/omtstm" }]
+      "allow": [{ "url": "https://ko-fi.com/omtstm" }]
     }
   ]
 }

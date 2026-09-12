@@ -56,6 +56,12 @@ export const ptBR: Catalogue = {
   'join.on': 'O que sobra se une em um vídeo contínuo.',
   'join.off': 'O buraco permanece. Ele sai preto e mudo na exportação.',
 
+  'media.title': 'Mídias',
+  'media.add': 'Adicionar um vídeo',
+  'media.append': 'Colocar de novo na linha do tempo',
+  'media.remove': 'Remover do projeto',
+  'media.first': 'Define o formato ao qual todo o resto é ajustado',
+
   'blocks.title': 'Blocos',
   'blocks.one': '1 bloco',
   'blocks.many': '{count} blocos',
@@ -98,6 +104,7 @@ export const ptBR: Catalogue = {
   'export.mode.enhanced.detail':
     'Preciso, mais ampliação e restauração. Este é o lento: espere várias vezes a duração do vídeo.',
   'export.mode.forced': 'Um buraco não pode ser copiado, então esta exportação recodifica.',
+  'export.mode.forcedByFiles': 'Mais de um arquivo não pode ser copiado, então esta exportação recodifica.',
 
   'export.lossless.exact': 'Cortes exatos. Nada é recodificado.',
   'export.lossless.shift': 'Os cortes recuam até {shift} para alcançar o ponto de corte mais próximo.',

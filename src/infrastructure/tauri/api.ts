@@ -67,6 +67,8 @@ export interface ExportOutcome {
 }
 
 export interface ClipPayload {
+  /** Index into the request's media table. */
+  readonly media: number
   readonly sourceStart: number
   readonly sourceEnd: number
   readonly timelineStart: number
@@ -84,6 +86,8 @@ export interface JobProgress {
 
 export interface ThumbnailPayload {
   readonly token: string
+  /** The file the frame came from. Two can be read at once. */
+  readonly media: string
   readonly index: number
   readonly at: number
   readonly dataUrl: string
@@ -127,12 +131,16 @@ export const api = {
 
   closeMedia: () => call<void>('close_media'),
 
+  /** Drops one file from the pool, leaving the rest of the project alone. */
+  forgetMedia: (path: string) => call<void>('forget_media', { path }),
+
   capabilities: () => call<Capabilities>('encoder_capabilities'),
 
-  preparePreview: (jobId: string) => call<PreviewSource>('prepare_preview', { jobId }),
+  preparePreview: (path: string, jobId: string) =>
+    call<PreviewSource>('prepare_preview', { path, jobId }),
 
-  generateThumbnails: (count: number, token: string) =>
-    call<void>('generate_thumbnails', { count, token }),
+  generateThumbnails: (path: string, count: number, token: string) =>
+    call<void>('generate_thumbnails', { path, count, token }),
 
   suggestOutputPath: (extension?: string) =>
     call<string>('suggest_output_path', { extension: extension ?? null }),
@@ -140,6 +148,8 @@ export const api = {
   exportTimeline: (request: {
     jobId: string
     outputPath: string
+    /** Every file the timeline reads from, in the order the clips index it. */
+    media: readonly string[]
     clips: readonly ClipPayload[]
     spec: ExportSpec
   }) => call<ExportOutcome>('export_timeline', { request }),
@@ -151,7 +161,7 @@ export const api = {
   /** Reports that the editor has painted, so the splash can be swapped for it. */
   finishStartup: () => call<void>('finish_startup'),
 
-  keyframes: () => call<KeyframeReport>('keyframe_positions'),
+  keyframes: (path: string) => call<KeyframeReport>('keyframe_positions', { path }),
 } as const
 
 /** Event topics, matching `src-tauri/src/interface/events.rs`. */

@@ -53,6 +53,12 @@ export const zh: Catalogue = {
   'join.on': '剩下的部分会接成一段连续的视频。',
   'join.off': '空缺会保留，导出时为黑屏和静音。',
 
+  'media.title': '素材',
+  'media.add': '添加视频',
+  'media.append': '再次放到时间线上',
+  'media.remove': '从项目中移除',
+  'media.first': '决定其他素材统一到的格式',
+
   'blocks.title': '片段',
   'blocks.one': '1 个片段',
   'blocks.many': '{count} 个片段',
@@ -93,6 +99,7 @@ export const zh: Catalogue = {
   'export.mode.enhanced.summary': '耗时更久，会提升分辨率并做修复。',
   'export.mode.enhanced.detail': '在精确的基础上加上放大与修复。这是最慢的一种：预计耗时为视频时长的数倍。',
   'export.mode.forced': '空缺无法复制，因此这次导出会重新编码。',
+  'export.mode.forcedByFiles': '多个文件无法复制，因此这次导出会重新编码。',
 
   'export.lossless.exact': '切点精确，不做任何重新编码。',
   'export.lossless.shift': '切点会向前移动最多 {shift}，以对齐最近的可切位置。',

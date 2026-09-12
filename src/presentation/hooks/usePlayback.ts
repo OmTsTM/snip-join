@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from 'react'
 
 import { sourceAt, totalDuration } from '@domain/timeline'
-import { selectTimeline, useEditor } from '@presentation/state/editorStore'
+import { selectPreviewUrl, selectTimeline, useEditor } from '@presentation/state/editorStore'
 
 /**
  * How far the video element may drift from the timeline clock before it is
@@ -32,7 +32,7 @@ export function usePlayback(video: RefObject<HTMLVideoElement | null>) {
   const volume = useEditor((state) => state.volume)
   const muted = useEditor((state) => state.muted)
   // Re-applied when the source changes: a fresh element starts at full volume.
-  const url = useEditor((state) => state.previewUrl)
+  const url = useEditor(selectPreviewUrl)
   const rate = 1
 
   // The clock. Reads the latest state directly rather than through the closure,

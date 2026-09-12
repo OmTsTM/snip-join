@@ -4,15 +4,17 @@ import { clamp, contains, duration, EPSILON, intersect, isEmpty, overlaps, span,
 export type BlockId = string & { readonly __brand: 'BlockId' }
 
 /**
- * One surviving piece of the source.
+ * One surviving piece of a medium.
  *
- * `source` is the stretch of the original file this block shows. `start` is
- * where that stretch sits on the edited timeline. Keeping them independent is
- * the whole trick: moving a block changes only `start`, and nothing is copied,
- * re-read or re-encoded until export.
+ * `mediaId` says which file it comes from, `source` is the stretch of that file
+ * this block shows, and `start` is where that stretch sits on the edited
+ * timeline. Keeping them independent is the whole trick: moving a block changes
+ * only `start`, and nothing is copied, re-read or re-encoded until export.
  */
 export interface Block {
   readonly id: BlockId
+  /** The file this piece reads from, which is its path. */
+  readonly mediaId: string
   readonly source: Span
   readonly start: number
 }
@@ -48,11 +50,84 @@ export function blockSpan(block: Block): Span {
 }
 
 /** A freshly opened video: one block covering the whole thing. */
-export function createTimeline(sourceDuration: number, mode: TimelineMode = 'join'): Timeline {
+export function createTimeline(
+  mediaId: string,
+  sourceDuration: number,
+  mode: TimelineMode = 'join',
+): Timeline {
   return {
-    blocks: [{ id: nextBlockId(), source: span(0, sourceDuration), start: 0 }],
+    blocks: [{ id: nextBlockId(), mediaId, source: span(0, sourceDuration), start: 0 }],
     mode,
   }
+}
+
+/**
+ * Adds a whole medium after everything already on the timeline.
+ *
+ * Appending rather than placing: where it ends up is the user's business, and
+ * every gesture that moves a block already exists.
+ */
+export function appendMedium(
+  timeline: Timeline,
+  mediaId: string,
+  sourceDuration: number,
+): Timeline {
+  const block: Block = {
+    id: nextBlockId(),
+    mediaId,
+    source: span(0, sourceDuration),
+    start: totalDuration(timeline),
+  }
+  return settle(timeline, [...timeline.blocks, block])
+}
+
+/**
+ * Whether the timeline reads from more than one file.
+ *
+ * This is what makes a stream copy impossible: packets from two encodings
+ * cannot be concatenated however alike the two files look.
+ */
+export function spansMultipleMedia(timeline: Timeline): boolean {
+  const first = timeline.blocks[0]?.mediaId
+  return timeline.blocks.some((block) => block.mediaId !== first)
+}
+
+/**
+ * Replaces the whole block list, restoring the invariants.
+ *
+ * The one way to hand `settle` an arbitrary list from outside this module.
+ * Dropping every block of a removed medium is the case it exists for.
+ */
+export function withBlocks(timeline: Timeline, blocks: readonly Block[]): Timeline {
+  return settle(timeline, blocks)
+}
+
+/**
+ * Which medium plays at a position.
+ *
+ * Inside a hole it answers with the medium of the piece before it rather than
+ * nothing. The alternative unmounts the video element every time the playhead
+ * crosses a hole, which reloads the file and costs a visible stall on the far
+ * side; the curtain over the picture is what says there is nothing there.
+ */
+export function mediaAt(timeline: Timeline, at: number): string | null {
+  const here = blockAt(timeline, at)
+  if (here) return here.mediaId
+
+  let previous: Block | null = null
+  for (const block of timeline.blocks) {
+    if (block.start <= at) previous = block
+  }
+  return (previous ?? timeline.blocks[0])?.mediaId ?? null
+}
+
+/** Every medium the timeline uses, in the order the blocks first reach for it. */
+export function mediaOrder(timeline: Timeline): string[] {
+  const seen: string[] = []
+  for (const block of timeline.blocks) {
+    if (!seen.includes(block.mediaId)) seen.push(block.mediaId)
+  }
+  return seen
 }
 
 export function totalDuration(timeline: Timeline): number {
@@ -165,7 +240,7 @@ function splitBlock(block: Block, at: number): Block[] {
   const cutPoint = block.source.start + offset
   return [
     { ...block, source: span(block.source.start, cutPoint) },
-    { id: nextBlockId(), source: span(cutPoint, block.source.end), start: at },
+    { id: nextBlockId(), mediaId: block.mediaId, source: span(cutPoint, block.source.end), start: at },
   ]
 }
 
@@ -213,6 +288,7 @@ export function removeSpan(timeline: Timeline, range: Span): Timeline {
     if (bounds.end - cut.end > EPSILON) {
       blocks.push({
         id: nextBlockId(),
+        mediaId: block.mediaId,
         source: span(block.source.start + (cut.end - bounds.start), block.source.end),
         start: cut.end,
       })

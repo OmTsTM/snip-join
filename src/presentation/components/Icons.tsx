@@ -163,6 +163,14 @@ export const Check = (props: IconProps) => (
   </Icon>
 )
 
+/** Adding one more of something. */
+export const Plus = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M12 5.5v13" />
+    <path d="M5.5 12h13" />
+  </Icon>
+)
+
 /** Leaving the application. Only the credit line uses it. */
 export const ArrowOut = (props: IconProps) => (
   <Icon {...props}>

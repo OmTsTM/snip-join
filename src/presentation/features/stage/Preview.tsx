@@ -7,15 +7,20 @@ import { Hole } from '@presentation/components/Icons'
 import { ProgressBar } from '@presentation/components/primitives'
 import { usePlayback } from '@presentation/hooks/usePlayback'
 import { useT } from '@presentation/i18n/I18nProvider'
-import { selectTimeline, useEditor } from '@presentation/state/editorStore'
+import {
+  selectIsProxy,
+  selectPreviewUrl,
+  selectTimeline,
+  useEditor,
+} from '@presentation/state/editorStore'
 
 export function Preview() {
   const t = useT()
   const video = useRef<HTMLVideoElement>(null)
 
-  const previewUrl = useEditor((state) => state.previewUrl)
+  const previewUrl = useEditor(selectPreviewUrl)
   const source = useEditor((state) => state.source)
-  const isProxy = useEditor((state) => state.isProxy)
+  const isProxy = useEditor(selectIsProxy)
   const phase = useEditor((state) => state.phase)
   const proxyProgress = useEditor((state) => state.proxyProgress)
 

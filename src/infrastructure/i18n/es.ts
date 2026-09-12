@@ -56,6 +56,12 @@ export const es: Catalogue = {
   'join.on': 'Lo que queda se une en un vídeo continuo.',
   'join.off': 'El hueco se queda. Se exporta en negro y en silencio.',
 
+  'media.title': 'Medios',
+  'media.add': 'Añadir un vídeo',
+  'media.append': 'Ponerlo otra vez en la línea de tiempo',
+  'media.remove': 'Quitar del proyecto',
+  'media.first': 'Define el formato al que se ajusta todo lo demás',
+
   'blocks.title': 'Bloques',
   'blocks.one': '1 bloque',
   'blocks.many': '{count} bloques',
@@ -98,6 +104,7 @@ export const es: Catalogue = {
   'export.mode.enhanced.detail':
     'Preciso, más ampliación y restauración. Este es el lento: cuenta con varias veces la duración del vídeo.',
   'export.mode.forced': 'Un hueco no se puede copiar, así que esta exportación recodifica.',
+  'export.mode.forcedByFiles': 'Más de un archivo no se puede copiar, así que esta exportación recodifica.',
 
   'export.lossless.exact': 'Cortes exactos. No se recodifica nada.',
   'export.lossless.shift': 'Los cortes retroceden hasta {shift} para llegar al punto de corte más cercano.',

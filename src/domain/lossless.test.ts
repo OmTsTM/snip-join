@@ -9,6 +9,7 @@ const KEYS = Array.from({ length: 31 }, (_, i) => i * 2)
 
 const block = (sourceStart: number, sourceEnd: number, start = 0): Block => ({
   id: nextBlockId(),
+  mediaId: 'a.mp4',
   source: span(sourceStart, sourceEnd),
   start,
 })
@@ -42,13 +43,13 @@ describe('finding the cut point a copy would really use', () => {
 
 describe('judging whether a copy would be faithful', () => {
   it('calls an untouched video exact', () => {
-    const timeline = createTimeline(60)
+    const timeline = createTimeline('a.mp4', 60)
     expect(losslessAccuracy(timeline.blocks, KEYS, 60).exact).toBe(true)
   })
 
   it('calls a cut on keyframes exact', () => {
     // Removing 10s to 20s, both of which are keyframes.
-    const timeline = removeSpan(createTimeline(60), span(10, 20))
+    const timeline = removeSpan(createTimeline('a.mp4', 60), span(10, 20))
     const accuracy = losslessAccuracy(timeline.blocks, KEYS, 60)
 
     expect(accuracy.exact).toBe(true)
@@ -57,7 +58,7 @@ describe('judging whether a copy would be faithful', () => {
 
   it('reports how far a cut between keyframes would drift', () => {
     // 11s is not a keyframe; a copy would really resume at 10s.
-    const timeline = removeSpan(createTimeline(60), span(5, 11))
+    const timeline = removeSpan(createTimeline('a.mp4', 60), span(5, 11))
     const accuracy = losslessAccuracy(timeline.blocks, KEYS, 60)
 
     expect(accuracy.exact).toBe(false)
@@ -68,12 +69,12 @@ describe('judging whether a copy would be faithful', () => {
   it('does not blame the untouched head and tail of the video', () => {
     // The first block starts at 0 and the last ends at the source duration;
     // neither needs a keyframe of its own.
-    const timeline = removeSpan(createTimeline(60), span(20, 30))
+    const timeline = removeSpan(createTimeline('a.mp4', 60), span(20, 30))
     expect(losslessAccuracy(timeline.blocks, KEYS, 60).exact).toBe(true)
   })
 
   it('treats a source with no keyframe list as inexact once it is cut', () => {
-    const timeline = removeSpan(createTimeline(60), span(10, 20))
+    const timeline = removeSpan(createTimeline('a.mp4', 60), span(10, 20))
     expect(losslessAccuracy(timeline.blocks, [], 60).exact).toBe(false)
   })
 

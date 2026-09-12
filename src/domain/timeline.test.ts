@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { span } from './time'
 import {
+  appendMedium,
   blockAt,
   blockEnd,
   createTimeline,
@@ -9,19 +10,26 @@ import {
   isContiguous,
   isolateSpan,
   keptDuration,
+  mediaAt,
+  mediaOrder,
   moveBlock,
   removeBlock,
   removeSpan,
   setMode,
   sourceAt,
+  spansMultipleMedia,
   splitAt,
   totalDuration,
   trimBlock,
+  withBlocks,
   type Timeline,
 } from './timeline'
 
 /** A one-minute clip, whole, with holes closed. */
-const fresh = (mode: 'join' | 'gap' = 'join') => createTimeline(60, mode)
+const fresh = (mode: 'join' | 'gap' = 'join') => createTimeline(MEDIA, 60, mode)
+
+/** The one file most of these tests work with. */
+const MEDIA = 'a.mp4'
 
 const layout = (timeline: Timeline) =>
   timeline.blocks.map((block) => ({
@@ -257,5 +265,71 @@ describe('how much of the original survives', () => {
     const timeline = removeSpan(fresh('gap'), span(20, 30))
     expect(keptDuration(timeline)).toBe(50)
     expect(totalDuration(timeline)).toBe(60)
+  })
+})
+
+describe('several media on one timeline', () => {
+  const SECOND = 'b.mp4'
+
+  it('appends a whole medium after everything already there', () => {
+    const timeline = appendMedium(fresh(), SECOND, 20)
+
+    expect(timeline.blocks).toHaveLength(2)
+    expect(timeline.blocks[1]!.mediaId).toBe(SECOND)
+    expect(timeline.blocks[1]!.start).toBe(60)
+    expect(totalDuration(timeline)).toBe(80)
+  })
+
+  it('reports one file as one file', () => {
+    expect(spansMultipleMedia(fresh())).toBe(false)
+    expect(mediaOrder(fresh())).toEqual([MEDIA])
+  })
+
+  it('reports a second file, in the order it is first reached for', () => {
+    const timeline = appendMedium(fresh(), SECOND, 20)
+
+    expect(spansMultipleMedia(timeline)).toBe(true)
+    expect(mediaOrder(timeline)).toEqual([MEDIA, SECOND])
+  })
+
+  it('names the same file once however many blocks read from it', () => {
+    const timeline = appendMedium(appendMedium(fresh(), SECOND, 20), MEDIA, 60)
+
+    expect(timeline.blocks).toHaveLength(3)
+    expect(mediaOrder(timeline)).toEqual([MEDIA, SECOND])
+  })
+
+  it('keeps the medium when a block is split', () => {
+    const timeline = splitAt(appendMedium(fresh(), SECOND, 20), 70)
+
+    expect(timeline.blocks.map((block) => block.mediaId)).toEqual([MEDIA, SECOND, SECOND])
+  })
+
+  it('keeps the medium when a stretch is removed from the middle', () => {
+    const timeline = removeSpan(appendMedium(fresh(), SECOND, 20), span(65, 70))
+
+    expect(timeline.blocks.map((block) => block.mediaId)).toEqual([MEDIA, SECOND, SECOND])
+  })
+
+  it('drops every block of a medium that is removed', () => {
+    const timeline = appendMedium(fresh(), SECOND, 20)
+    const left = withBlocks(
+      timeline,
+      timeline.blocks.filter((block) => block.mediaId !== SECOND),
+    )
+
+    expect(left.blocks).toHaveLength(1)
+    expect(spansMultipleMedia(left)).toBe(false)
+  })
+
+  /**
+   * Answering with nothing inside a hole unmounts the video element, which
+   * reloads the file and stalls on the far side of the hole.
+   */
+  it('answers with the piece before it when the playhead is in a hole', () => {
+    const withHole = removeSpan(setMode(fresh(), 'gap'), span(20, 30))
+
+    expect(mediaAt(withHole, 10)).toBe(MEDIA)
+    expect(mediaAt(withHole, 25)).toBe(MEDIA)
   })
 })

@@ -8,6 +8,7 @@ import { ExportDialog } from '@presentation/features/export/ExportDialog'
 import { ShortcutsDialog } from '@presentation/features/chrome/ShortcutsDialog'
 import { TitleBar } from '@presentation/features/chrome/TitleBar'
 import { BlockList } from '@presentation/features/inspector/BlockList'
+import { MediaPool } from '@presentation/features/inspector/MediaPool'
 import { SelectionPanel } from '@presentation/features/inspector/SelectionPanel'
 import { Preview } from '@presentation/features/stage/Preview'
 import { Transport } from '@presentation/features/stage/Transport'
@@ -125,7 +126,8 @@ export function App() {
                   distance, never a control they can no longer reach. */}
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
                 <SelectionPanel />
-                <BlockList />
+                <MediaPool />
+              <BlockList />
               </div>
 
               {/* Pinned: the export button is where the whole panel leads. */}

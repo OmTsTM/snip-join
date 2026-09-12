@@ -122,6 +122,9 @@ pub struct ThumbnailDto {
     /// Echoes the token the request carried, so the renderer can drop frames
     /// belonging to a file it has already closed.
     pub token: String,
+    /// Which file the frame came from. The strip is filled per medium, and two
+    /// files can be read at once.
+    pub media: String,
     pub index: usize,
     pub at: f64,
     pub data_url: String,

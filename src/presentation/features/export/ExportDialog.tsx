@@ -18,7 +18,7 @@ import {
 import { losslessAccuracy } from '@domain/lossless'
 import { displaySize, formatBytes, pixelCount, sourceExtension } from '@domain/media'
 import { formatDuration, formatTimecode } from '@domain/time'
-import { isContiguous } from '@domain/timeline'
+import { isContiguous, spansMultipleMedia } from '@domain/timeline'
 import { Check, Close, Export as ExportIcon, Folder, Sparkle } from '@presentation/components/Icons'
 import {
   Button,
@@ -56,7 +56,9 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const hasGaps = !isContiguous(timeline)
-  const copyPossible = canCopyStreams(spec, hasGaps)
+  const spansMedia = spansMultipleMedia(timeline)
+  const copyImpossible = hasGaps || spansMedia
+  const copyPossible = canCopyStreams(spec, hasGaps, spansMedia)
 
   // Ask the backend where to put the result the first time the dialog opens for
   // a given file, rather than guessing a path in the renderer.
@@ -80,8 +82,10 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
   // backend enforces this too; doing it here means the dialog never shows a
   // promise it cannot keep.
   useEffect(() => {
-    if (hasGaps && spec.mode === 'fast') setSpec((current) => ({ ...current, mode: 'precise' }))
-  }, [hasGaps, spec.mode])
+    if (copyImpossible && spec.mode === 'fast') {
+      setSpec((current) => ({ ...current, mode: 'precise' }))
+    }
+  }, [copyImpossible, spec.mode])
 
   const chooseDestination = useCallback(async () => {
     if (!source) return
@@ -181,14 +185,14 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
                           key={mode}
                           mode={mode}
                           selected={spec.mode === mode}
-                          disabled={mode === 'fast' && hasGaps}
+                          disabled={mode === 'fast' && copyImpossible}
                           onSelect={() => setMode(mode)}
                         />
                       ))}
                     </div>
-                    {hasGaps ? (
+                    {copyImpossible ? (
                       <p className="mt-2 text-[11.5px] leading-snug text-dusk-lift">
-                        {t('export.mode.forced')}
+                        {hasGaps ? t('export.mode.forced') : t('export.mode.forcedByFiles')}
                       </p>
                     ) : (
                       spec.mode === 'fast' && <LosslessNote />

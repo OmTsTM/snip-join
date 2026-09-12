@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  selectActiveMedia,
   selectBlockAtPlayhead,
+  selectIsProxy,
+  selectPreviewUrl,
   selectCanRedo,
   selectCanUndo,
   selectDuration,
@@ -28,6 +31,9 @@ describe('every exported selector is reference-stable', () => {
     selectCanUndo,
     selectCanRedo,
     selectBlockAtPlayhead,
+    selectActiveMedia,
+    selectPreviewUrl,
+    selectIsProxy,
   }
 
   it('returns an identical value when nothing in the store changed', () => {
