@@ -141,10 +141,12 @@ fn payload_root(extracted: &Path) -> AppResult<PathBuf> {
 
 /// Copies the new copy over the old one.
 ///
-/// Returns an error rather than half-doing it: the executable is moved aside
-/// first, because everything else can be overwritten in place and it cannot, and
-/// because a failure after that point still leaves a runnable copy under the old
-/// name for someone to rescue by hand.
+/// The executable is moved aside first, because everything else can be
+/// overwritten in place and it cannot. If anything after that goes wrong — a
+/// locked file, a full disk, a folder that turns out to be read-only — the old
+/// executable is put straight back: a half-copied folder with no program in it
+/// is worse than no update at all, and it is what somebody would be left
+/// double-clicking.
 pub fn swap(payload: &Path, install: &Path) -> AppResult<()> {
     let running = executable_in(install)
         .ok_or_else(|| AppError::InvalidInput("that is not a Snip Join folder".into()))?;
@@ -155,7 +157,12 @@ pub fn swap(payload: &Path, install: &Path) -> AppResult<()> {
         AppError::Internal(format!("the old copy would not step aside: {error}"))
     })?;
 
-    copy_over(payload, install)
+    if let Err(error) = copy_over(payload, install) {
+        let _ = std::fs::rename(&stepped_aside, &running);
+        return Err(error);
+    }
+
+    Ok(())
 }
 
 /// Where the outgoing executable waits until the process using it has ended.
@@ -217,7 +224,14 @@ pub fn finish(payload: &Path, install: &Path) -> AppResult<()> {
     loop {
         match swap(payload, install) {
             Ok(()) => break,
-            Err(error) if std::time::Instant::now() >= deadline => return Err(error),
+            Err(error) if std::time::Instant::now() >= deadline => {
+                // Giving up is not the same as disappearing. The folder is back
+                // as it was, so the old copy is started again rather than
+                // leaving somebody looking at a window that never returns — the
+                // update failed, the application did not.
+                launch(install);
+                return Err(error);
+            }
             // Usually a file the old copy still has open — an export's FFmpeg,
             // say — which stops being true a moment later.
             Err(_) => std::thread::sleep(std::time::Duration::from_millis(200)),
@@ -241,15 +255,20 @@ pub fn finish(payload: &Path, install: &Path) -> AppResult<()> {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
-    let installed = executable_in(install)
-        .ok_or_else(|| AppError::Internal("the new copy is not where it was put".into()))?;
-
-    std::process::Command::new(installed)
-        .current_dir(install)
-        .spawn()
-        .map_err(|error| AppError::Internal(format!("the new copy would not start: {error}")))?;
-
+    launch(install);
     Ok(())
+}
+
+/// Starts whatever program is in the folder, if there is one.
+///
+/// Best effort by design: this is called both after a successful swap and after
+/// a failed one, and in neither case is there anybody left to report to — the
+/// window that asked for the update is gone.
+fn launch(install: &Path) {
+    let Some(program) = executable_in(install) else { return };
+    if let Err(error) = std::process::Command::new(program).current_dir(install).spawn() {
+        tracing::error!(%error, "the copy in that folder would not start");
+    }
 }
 
 /// Where an update is unpacked before it replaces anything.
@@ -363,6 +382,29 @@ mod tests {
         assert!(executable_in(&install).unwrap().file_name().unwrap() == "SnipJoin.exe");
         sweep(&install);
         assert!(!outgoing(&install).is_file());
+    }
+
+    /// The half-way failure, which is the one that would leave somebody with a
+    /// folder and no program in it.
+    #[test]
+    fn a_swap_that_fails_puts_the_old_program_back() {
+        let root = scratch("rescue");
+        let install = root.join("Snip Join");
+        write(&install.join("SnipJoin.exe"), "old");
+        write(&install.join(KEPT).join("settings.json"), "the user's");
+
+        // A payload that is not there: `copy_over` fails after the executable
+        // has already stepped aside, which is exactly the dangerous moment.
+        let missing = root.join("never unpacked");
+
+        assert!(swap(&missing, &install).is_err());
+        assert_eq!(
+            std::fs::read_to_string(install.join("SnipJoin.exe")).unwrap(),
+            "old",
+            "the old program is back where it was"
+        );
+        assert!(!outgoing(&install).exists());
+        assert!(executable_in(&install).is_some());
     }
 
     #[test]
