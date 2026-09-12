@@ -187,10 +187,27 @@ pub fn finish(payload: &Path, install: &Path) -> AppResult<()> {
         match swap(payload, install) {
             Ok(()) => break,
             Err(error) if std::time::Instant::now() >= deadline => return Err(error),
-            // Almost always "the old process still has its executable open",
-            // which stops being true a moment later.
+            // Usually a file the old copy still has open — an export's FFmpeg,
+            // say — which stops being true a moment later.
             Err(_) => std::thread::sleep(std::time::Duration::from_millis(200)),
         }
+    }
+
+    /*
+      Now wait for the old copy to actually be gone, by deleting what it is
+      running from.
+
+      Renaming the executable did not need it to have exited, which is the trick
+      that makes the swap possible — but starting the new one does. Both copies
+      share the folder the web view keeps its own storage in, and a second
+      instance starting while the first still holds it is a window that fails to
+      appear. A running executable cannot be deleted on Windows and one that has
+      exited can, so this asks the only question that matters and tidies up by
+      asking it.
+    */
+    let outgoing = install.join(format!("{EXECUTABLE}{OLD_SUFFIX}"));
+    while std::fs::remove_file(&outgoing).is_err() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 
     std::process::Command::new(install.join(EXECUTABLE))

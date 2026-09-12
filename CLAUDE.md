@@ -453,10 +453,17 @@ wrong one would leave two Snip Joins on the machine, one of them in the registry
   will not overwrite a running executable, so the archive is unpacked to a
   temporary folder, a copy of the *new* executable is started with
   `--finish-update <payload> <install>`, and this process exits. The finisher
-  waits for the old executable to be renamable, renames it to `.old`, copies the
-  new files over — never `data/`, which belongs to the user — and starts what it
-  installed. `lib.rs` reads that argument before anything else, including the web
-  view: that start is not an editor. No script is ever written.
+  renames the old executable to `.old` — allowed while it runs, which is the
+  whole trick — copies the new files over (never `data/`, which belongs to the
+  user), and starts what it installed. `lib.rs` reads that argument before
+  anything else, including the web view: that start is not an editor. No script
+  is ever written.
+- **The swap can finish before the old copy has.** Renaming does not need the
+  old process gone, so the finisher could relaunch while it is still exiting —
+  and the two would fight over the web view's storage under `data/`, which shows
+  up as a second window that never appears. Deleting the `.old` file is the wait:
+  Windows refuses to delete a running executable and allows it the moment the
+  process ends, so the one call both asks the question and tidies up.
 - **Unpacking treats the archive as hostile.** `enclosed_name` refuses `..` and
   absolute paths; without it a crafted zip writes wherever it likes. There is a
   test for exactly that.
