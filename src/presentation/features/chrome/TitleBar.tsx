@@ -9,7 +9,7 @@ import { useI18n } from '@presentation/i18n/I18nProvider'
 import { LOCALES, LOCALE_NAMES, type Locale } from '@infrastructure/i18n'
 import { selectDuration, useEditor } from '@presentation/state/editorStore'
 import { displaySize } from '@domain/media'
-import { OpenAnother } from './OpenAnother'
+import { OpenAnother, OpenProject } from './OpenAnother'
 import { formatTimecode } from '@domain/time'
 
 /**
@@ -93,6 +93,11 @@ export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => 
 
       {!source && <div data-tauri-drag-region className="flex-1" />}
 
+      {/* Opening a project is offered whether or not anything is loaded: it is
+          the way back into work, and the welcome screen is exactly where that
+          is wanted. Adding a file is only meaningful once there is a project to
+          add it to. */}
+      <OpenProject />
       {source && <OpenAnother />}
 
       <button

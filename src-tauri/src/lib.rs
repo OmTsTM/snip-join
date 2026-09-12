@@ -94,6 +94,9 @@ pub fn run() {
             commands::initial_file,
             commands::keyframe_positions,
             commands::finish_startup,
+            commands::save_project,
+            commands::load_project,
+            commands::media_exists,
         ])
         .run(tauri::generate_context!())
         .expect("the Snip Join window could not be created");

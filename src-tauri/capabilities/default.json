@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Least-privilege surface for the editor window: window chrome control, native file pickers, opening an exported file in the OS file manager, and the two outbound addresses the window offers. No filesystem, shell or HTTP capability is granted to the renderer; every media operation goes through a typed Rust command.",
+  "description": "Least-privilege surface for the editor window: window chrome control (including destroy, which is how a close survives the unsaved-work question), native file pickers, opening an exported file in the OS file manager, and the two outbound addresses the window offers. No filesystem, shell or HTTP capability is granted to the renderer; every media operation goes through a typed Rust command.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -10,6 +10,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-is-maximized",
     "core:window:allow-close",
+    "core:window:allow-destroy",
     "core:event:default",
     "dialog:allow-open",
     "dialog:allow-save",

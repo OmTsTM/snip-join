@@ -1,7 +1,8 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { useCallback } from 'react'
 
-import { Folder } from '@presentation/components/Icons'
+import { Folder, Project } from '@presentation/components/Icons'
+import { useProjectActions } from '@presentation/features/project/useProject'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { useEditor } from '@presentation/state/editorStore'
 
@@ -78,6 +79,31 @@ export function OpenAnother() {
     >
       <Folder size={13} />
       {t('source.open')}
+    </button>
+  )
+}
+
+/**
+ * Opens a saved project.
+ *
+ * Beside the one that brings in a file, because they are the same decision from
+ * the user's side — "start from this" — and the only difference is whether the
+ * thing being started from is a video or an edit that already exists.
+ */
+export function OpenProject() {
+  const t = useT()
+  const { openExisting } = useProjectActions()
+
+  return (
+    <button
+      type="button"
+      onClick={() => void openExisting()}
+      title={t('project.open')}
+      aria-label={t('project.open')}
+      className="no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-faint transition-colors duration-150 hover:bg-raised hover:text-paper"
+    >
+      <Project size={13} />
+      {t('project.open')}
     </button>
   )
 }

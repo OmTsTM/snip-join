@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom'
 import { formatTimecode } from '@domain/time'
 import { mediaOrder } from '@domain/timeline'
 import { ConfirmDialog } from '@presentation/components/ConfirmDialog'
-import { Folder, Image, Trash } from '@presentation/components/Icons'
+import { Broken, Folder, Image, Locate, Trash } from '@presentation/components/Icons'
 import { cx, IconButton } from '@presentation/components/primitives'
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from '@presentation/features/chrome/OpenAnother'
 import { useT } from '@presentation/i18n/I18nProvider'
@@ -35,6 +35,7 @@ export function MediaPool() {
   const timeline = useEditor(selectTimeline)
   const addMedia = useEditor((state) => state.addMedia)
   const removeMedium = useEditor((state) => state.removeMedium)
+  const missingMedia = useEditor((state) => state.missingMedia)
 
   const [asking, setAsking] = useState<MediaDragSource | null>(null)
 
@@ -52,7 +53,7 @@ export function MediaPool() {
     if (typeof selected === 'string') await addMedia(selected)
   }, [addMedia])
 
-  if (media.length === 0) return null
+  if (media.length === 0 && missingMedia.length === 0) return null
 
   const used = mediaOrder(timeline)
 
@@ -120,6 +121,14 @@ export function MediaPool() {
           })}
         </AnimatePresence>
       </ul>
+
+      {missingMedia.length > 0 && (
+        <ul className="space-y-1 px-2 pb-1">
+          {missingMedia.map((path) => (
+            <MissingRow key={path} path={path} />
+          ))}
+        </ul>
+      )}
 
       <p className="px-4 pb-3 pt-1 text-[11px] leading-snug text-faint">{t('media.hint')}</p>
 
@@ -294,5 +303,66 @@ function MediaDragGhost() {
       {source.fileName}
     </div>,
     document.body,
+  )
+}
+
+/**
+ * A file the project names that is not where it left it.
+ *
+ * It keeps its place rather than being quietly dropped: the blocks that read
+ * from it are still on the timeline, and rewriting someone's edit to match an
+ * accident on disk is not a repair. Two ways out, and they are genuinely
+ * different — say where the file went, or decide it is gone and take its blocks
+ * with it. The export refuses until one of them is chosen.
+ */
+function MissingRow({ path }: { readonly path: string }) {
+  const t = useT()
+  const locateMedium = useEditor((state) => state.locateMedium)
+  const dropMissingMedium = useEditor((state) => state.dropMissingMedium)
+
+  const locate = useCallback(async () => {
+    const chosen = await open({
+      multiple: false,
+      directory: false,
+      filters: [
+        { name: 'Video', extensions: VIDEO_EXTENSIONS },
+        { name: 'Image', extensions: IMAGE_EXTENSIONS },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    })
+
+    if (typeof chosen === 'string') await locateMedium(path, chosen)
+  }, [locateMedium, path])
+
+  const name = path.split(/[\/]/).pop() ?? path
+
+  return (
+    <li>
+      <div className="group flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-raised/60">
+        <span
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] bg-snip/15 text-snip"
+          title={t('media.missing')}
+        >
+          <Broken size={13} />
+        </span>
+
+        <span className="min-w-0 flex-1" title={`${path}
+${t('media.missing')}`}>
+          <span className="block truncate text-[12px] text-muted line-through decoration-snip/50">
+            {name}
+          </span>
+          <span className="block truncate text-[10.5px] text-snip">{t('media.missing')}</span>
+        </span>
+
+        <span className="flex shrink-0 items-center">
+          <IconButton label={t('media.locate')} onClick={() => void locate()}>
+            <Locate size={14} />
+          </IconButton>
+          <IconButton label={t('media.remove')} onClick={() => dropMissingMedium(path)}>
+            <Trash size={14} />
+          </IconButton>
+        </span>
+      </div>
+    </li>
   )
 }

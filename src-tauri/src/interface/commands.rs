@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::application::error::{AppError, AppResult};
-use crate::application::{export_plan, media_library};
+use crate::application::{export_plan, media_library, project_file};
 use crate::domain::media::MediaSource;
 use crate::infrastructure::executor;
 use crate::infrastructure::ffmpeg::{capabilities, keyframes, thumbnailer, transcoder};
@@ -338,6 +338,39 @@ pub async fn close_media(state: State<'_, EditorState>) -> AppResult<()> {
 pub async fn forget_media(state: State<'_, EditorState>, path: String) -> AppResult<()> {
     state.forget(&path);
     Ok(())
+}
+
+/// Writes a project file.
+///
+/// The renderer has no filesystem capability at all, so every byte it wants on
+/// disk comes through a command like this one — which is also where the path is
+/// checked. A project is the one file this application produces that cannot be
+/// produced again, so the write goes through a scratch file and a rename.
+#[tauri::command]
+pub async fn save_project(path: String, contents: String) -> AppResult<String> {
+    let destination = project_file::validate_project_destination(&path)?;
+    project_file::write_project(&destination, &contents)?;
+    Ok(destination.to_string_lossy().into_owned())
+}
+
+/// Reads a project file back.
+///
+/// Returns the text rather than a parsed shape: what a project *means* is the
+/// editor's business, and the backend has no use for a block.
+#[tauri::command]
+pub async fn load_project(path: String) -> AppResult<String> {
+    let source = project_file::validate_project_source(&path)?;
+    project_file::read_project(&source)
+}
+
+/// Whether a path still points at a readable file.
+///
+/// Media can be moved or deleted while a project sits saved on disk, and a
+/// project naming a file that is no longer there has to say so when it opens
+/// rather than fail at export time.
+#[tauri::command]
+pub async fn media_exists(path: String) -> AppResult<bool> {
+    Ok(std::fs::metadata(&path).map(|m| m.is_file() && m.len() > 0).unwrap_or(false))
 }
 
 fn media_named(state: &State<'_, EditorState>, path: &str) -> AppResult<MediaSource> {

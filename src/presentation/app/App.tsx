@@ -1,7 +1,8 @@
 import { getCurrentWebview } from '@tauri-apps/api/webview'
-import { useCallback, useEffect, useState } from 'react'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { Export as ExportIcon } from '@presentation/components/Icons'
+import { Export as ExportIcon, Save as SaveIcon } from '@presentation/components/Icons'
 import { Button } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { ExportDialog } from '@presentation/features/export/ExportDialog'
@@ -15,9 +16,16 @@ import { Transport } from '@presentation/features/stage/Transport'
 import { DockResizer } from '@presentation/features/timeline/DockResizer'
 import { TimelineDock } from '@presentation/features/timeline/TimelineDock'
 import { Welcome } from '@presentation/features/welcome/Welcome'
+import { UnsavedDialog } from '@presentation/features/project/UnsavedDialog'
+import { AUTOSAVE_INTERVAL_MS, useProjectActions } from '@presentation/features/project/useProject'
 import { useShortcuts } from '@presentation/hooks/useShortcuts'
 import { api } from '@infrastructure/tauri/api'
-import { connectBackendEvents, selectCanExport, useEditor } from '@presentation/state/editorStore'
+import {
+  connectBackendEvents,
+  selectCanExport,
+  selectDirty,
+  useEditor,
+} from '@presentation/state/editorStore'
 
 import { ErrorToast } from './ErrorToast'
 
@@ -31,6 +39,11 @@ export function App() {
   const [dropActive, setDropActive] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [askingToSave, setAskingToSave] = useState(false)
+
+  const dirty = useEditor(selectDirty)
+  const projectPath = useEditor((state) => state.projectPath)
+  const { saveNow } = useProjectActions()
 
   // Guarded here rather than only on the button, so the keyboard cannot reach
   // the dialog for a timeline that would produce no file.
@@ -43,6 +56,80 @@ export function App() {
   // One subscription for the whole application, torn down on unmount so a hot
   // reload cannot stack duplicate listeners.
   useEffect(() => connectBackendEvents(), [])
+
+  /**
+   * Writes a project that is already on disk, every so often.
+   *
+   * Only one that has been saved before: a project with no path has never been
+   * given a name or a place, and choosing one on the user's behalf while they
+   * are editing is not a rescue. What this covers is the power going out — the
+   * most that can be lost is the last half minute of cuts.
+   */
+  const dirtyRef = useRef(dirty)
+  dirtyRef.current = dirty
+  useEffect(() => {
+    if (!projectPath) return
+
+    const timer = window.setInterval(() => {
+      if (dirtyRef.current) void useEditor.getState().saveProject()
+    }, AUTOSAVE_INTERVAL_MS)
+
+    return () => window.clearInterval(timer)
+  }, [projectPath])
+
+  /**
+   * Stands between unsaved work and the window closing.
+   *
+   * Tauri asks before it closes, which is the only chance there is: once the
+   * window goes the state goes with it. The answer comes back asynchronously
+   * from a dialog, so the close is refused outright and reissued afterwards if
+   * that is what was chosen — `closing` is what stops the second close being
+   * questioned all over again.
+   */
+  const closing = useRef(false)
+  useEffect(() => {
+    let detach: (() => void) | null = null
+    let cancelled = false
+
+    void getCurrentWindow()
+      .onCloseRequested((event) => {
+        if (closing.current) return
+        const { media, history } = useEditor.getState()
+        if (media.length === 0) return
+
+        const mark = useEditor.getState().savedMark
+        const unsaved =
+          !mark || mark.timeline !== history.present || mark.media !== media
+        if (!unsaved) return
+
+        event.preventDefault()
+        setAskingToSave(true)
+      })
+      .then((unlisten) => {
+        if (cancelled) unlisten()
+        else detach = unlisten
+      })
+
+    return () => {
+      cancelled = true
+      detach?.()
+    }
+  }, [])
+
+  const closeForReal = useCallback(() => {
+    closing.current = true
+    setAskingToSave(false)
+    void getCurrentWindow().close()
+  }, [])
+
+  const saveThenClose = useCallback(() => {
+    void saveNow().then((written) => {
+      // A dismissed picker is not a save, and closing on it would throw away the
+      // work the question was asked about.
+      if (written) closeForReal()
+      else setAskingToSave(false)
+    })
+  }, [closeForReal, saveNow])
 
   // The editor window is created hidden. Reporting in after the first paint is
   // what makes it appear — two frames of margin, because a layout effect runs
@@ -143,7 +230,28 @@ export function App() {
                 here it is reachable at any window size and the two lists start
                 higher.
               */}
-              <div className="shrink-0 border-b border-line p-3">
+              {/* Saving beside exporting, and narrower: they are the two ways
+                  work leaves this window, but only one of them is what you do
+                  before you walk away from it. */}
+              <div className="flex shrink-0 items-center gap-2 border-b border-line p-3">
+                <Button
+                  tone="neutral"
+                  size="md"
+                  disabled={!canExport}
+                  title={dirty ? t('project.unsaved') : t('project.saved')}
+                  onClick={() => void saveNow()}
+                  icon={<SaveIcon size={15} />}
+                  className="relative"
+                >
+                  {t('project.save')}
+                  {dirty && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-dusk-lift"
+                    />
+                  )}
+                </Button>
+
                 <Button
                   tone="paper"
                   size="md"
@@ -173,6 +281,13 @@ export function App() {
       ) : (
         <Welcome dropActive={dropActive} />
       )}
+
+      <UnsavedDialog
+        open={askingToSave}
+        onSave={saveThenClose}
+        onDiscard={closeForReal}
+        onCancel={() => setAskingToSave(false)}
+      />
 
       <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />

@@ -4,3 +4,4 @@
 pub mod error;
 pub mod export_plan;
 pub mod media_library;
+pub mod project_file;

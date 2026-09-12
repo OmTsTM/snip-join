@@ -173,6 +173,20 @@ export const api = {
   finishStartup: () => call<void>('finish_startup'),
 
   keyframes: (path: string) => call<KeyframeReport>('keyframe_positions', { path }),
+
+  /**
+   * Writes a project file and answers with the path it actually landed at.
+   *
+   * The renderer has no filesystem capability of its own, so every byte it wants
+   * on disk goes through the backend — which is also where the path is checked.
+   */
+  saveProject: (path: string, contents: string) =>
+    call<string>('save_project', { path, contents }),
+
+  loadProject: (path: string) => call<string>('load_project', { path }),
+
+  /** Whether a path still points at a readable file. */
+  mediaExists: (path: string) => call<boolean>('media_exists', { path }),
 } as const
 
 /** Event topics, matching `src-tauri/src/interface/events.rs`. */

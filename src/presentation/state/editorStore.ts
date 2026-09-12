@@ -12,6 +12,13 @@ import {
   type History,
 } from '@application/history'
 import type { ExportSpec } from '@domain/export'
+import {
+  parseProject,
+  projectTimeline,
+  serialiseProject,
+  toProject,
+  type Project,
+} from '@domain/project'
 import { nearestKeyframe } from '@domain/lossless'
 import {
   clampDockHeight,
@@ -196,6 +203,33 @@ interface EditorState {
    */
   clipboard: Clip | null
 
+  /**
+   * Files the project names that could not be opened.
+   *
+   * Kept beside the pool rather than inside it: a missing file has no duration,
+   * no streams and no preview, so it is not a `MediaSourceInfo` and pretending
+   * otherwise would put zeroes into every calculation that touches it.
+   */
+  missingMedia: readonly string[]
+
+  /**
+   * Where this project lives on disk, once it has been saved anywhere.
+   *
+   * Null means it has never been saved, which is the only case where saving has
+   * to ask a question first.
+   */
+  projectPath: string | null
+
+  /**
+   * What the last save wrote, so "has anything changed" can be answered without
+   * serialising the whole project on every render.
+   *
+   * The two references are compared, not their contents: the store replaces the
+   * timeline and the media array wholesale on every edit, so identity says
+   * exactly as much as a deep comparison would and costs nothing.
+   */
+  savedMark: { readonly timeline: Timeline; readonly media: readonly MediaSourceInfo[] } | null
+
   exportJob: ExportJob | null
   lastExport: ExportOutcome | null
   error: AppError | null
@@ -248,6 +282,13 @@ interface EditorState {
   cutBlock: (id: BlockId) => void
   pasteAtPlayhead: () => void
 
+  saveProject: (path?: string) => Promise<boolean>
+  openProject: (path: string) => Promise<void>
+  /** Points a missing medium at the file it moved to. */
+  locateMedium: (missing: string, found: string) => Promise<void>
+  /** Drops a missing medium, and every block that reads from it. */
+  dropMissingMedium: (missing: string) => void
+
   undo: () => void
   redo: () => void
 
@@ -267,6 +308,63 @@ interface EditorState {
 }
 
 const DOCK_HEIGHT_KEY = 'snipjoin.timelineHeight'
+const RECENTS_KEY = 'snipjoin.recentProjects'
+
+/** How many recent projects the welcome screen offers. */
+const MAX_RECENTS = 6
+
+export interface RecentProject {
+  readonly path: string
+  /** Milliseconds since the epoch, so the list can be ordered by when. */
+  readonly at: number
+}
+
+/**
+ * The projects most recently opened or saved.
+ *
+ * In the web view's own storage rather than a file of its own: it is a
+ * convenience that belongs to this installation, it is worthless to anyone
+ * else, and losing it costs nothing. Anything unusable in there is treated as an
+ * empty list rather than propagating into the welcome screen.
+ */
+export function readRecentProjects(): readonly RecentProject[] {
+  try {
+    const raw: unknown = JSON.parse(window.localStorage.getItem(RECENTS_KEY) ?? '[]')
+    if (!Array.isArray(raw)) return []
+    return raw
+      .filter(
+        (entry): entry is RecentProject =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          typeof (entry as RecentProject).path === 'string' &&
+          typeof (entry as RecentProject).at === 'number',
+      )
+      .slice(0, MAX_RECENTS)
+  } catch {
+    return []
+  }
+}
+
+/** Puts a project at the top of the list, without listing it twice. */
+function rememberProject(path: string): void {
+  try {
+    const rest = readRecentProjects().filter((entry) => entry.path !== path)
+    const next = [{ path, at: Date.now() }, ...rest].slice(0, MAX_RECENTS)
+    window.localStorage.setItem(RECENTS_KEY, JSON.stringify(next))
+  } catch {
+    // The project is still open; only the shortcut back to it is lost.
+  }
+}
+
+/** Drops a project from the list, for one that is no longer on disk. */
+export function forgetRecentProject(path: string): void {
+  try {
+    const rest = readRecentProjects().filter((entry) => entry.path !== path)
+    window.localStorage.setItem(RECENTS_KEY, JSON.stringify(rest))
+  } catch {
+    // Nothing to do: the list is a convenience.
+  }
+}
 const EDGE_SCROLL_KEY = 'snipjoin.edgeScroll'
 const VOLUME_KEY = 'snipjoin.volume'
 const MUTED_KEY = 'snipjoin.muted'
@@ -430,6 +528,9 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   selectedBlock: null,
   clipboard: null,
+  missingMedia: [],
+  projectPath: null,
+  savedMark: null,
 
   exportJob: null,
   lastExport: null,
@@ -447,6 +548,9 @@ export const useEditor = create<EditorState>((set, get) => ({
       thumbnails: {},
       lastExport: null,
       selectedBlock: null,
+      missingMedia: [],
+      projectPath: null,
+      savedMark: null,
       mediaToken: token,
     })
 
@@ -597,6 +701,9 @@ export const useEditor = create<EditorState>((set, get) => ({
       keyframesTruncated: {},
       selectedBlock: null,
       clipboard: null,
+      missingMedia: [],
+      projectPath: null,
+      savedMark: null,
       exportJob: null,
       lastExport: null,
       mediaToken: '',
@@ -839,6 +946,185 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ history: record(history, timeline), selection: null, selectedBlock: inserted })
   },
 
+  /**
+   * Writes the project, asking where only the first time.
+   *
+   * Returns whether anything was written, because the close prompt has to know
+   * the difference between "saved" and "the picker was dismissed" — closing on
+   * the second would throw away the work the question was asked about.
+   */
+  async saveProject(path) {
+    const { media, history, projectPath } = get()
+    if (media.length === 0) return false
+
+    const destination = path ?? projectPath
+    if (!destination) return false
+
+    const project = toProject(
+      media.map((medium) => medium.path),
+      history.present,
+    )
+
+    try {
+      const written = await api.saveProject(destination, serialiseProject(project))
+      set({
+        projectPath: written,
+        savedMark: { timeline: history.present, media },
+      })
+      rememberProject(written)
+      return true
+    } catch (error) {
+      get().reportError(error)
+      return false
+    }
+  },
+
+  /**
+   * Opens a saved project, in place of whatever was open.
+   *
+   * Each medium is re-probed rather than trusted from the file: the files it
+   * names may have moved, changed or gone, and everything the editor needs about
+   * them — their length, their streams, whether they can be previewed — is a
+   * property of the file today rather than of the day it was saved. A medium
+   * that cannot be read keeps its place in the pool and is marked missing, so
+   * the edit is still there to be repaired.
+   */
+  async openProject(path) {
+    const token = crypto.randomUUID()
+    set({
+      phase: 'opening',
+      error: null,
+      media: [],
+      previewUrls: {},
+      proxies: {},
+      thumbnails: {},
+      keyframes: {},
+      keyframesTruncated: {},
+      lastExport: null,
+      selection: null,
+      selectedBlock: null,
+      clipboard: null,
+      playhead: 0,
+      playing: false,
+      proxyProgress: 0,
+      projectPath: null,
+      savedMark: null,
+      mediaToken: token,
+    })
+
+    let project: Project
+    try {
+      project = parseProject(await api.loadProject(path))
+    } catch (error) {
+      set({ phase: 'empty' })
+      get().reportError(error)
+      return
+    }
+
+    const opened: MediaSourceInfo[] = []
+    const missing: string[] = []
+    for (const medium of project.media) {
+      try {
+        opened.push(await api.openMedia(medium))
+      } catch {
+        missing.push(medium)
+      }
+    }
+    if (get().mediaToken !== token) return
+
+    if (opened.length === 0) {
+      set({ phase: 'empty' })
+      get().reportError(new Error('none of the files this project uses could be opened'))
+      return
+    }
+
+    // The blocks of a missing medium are kept, not dropped. Dropping them
+    // would quietly rewrite the edit to match an accident — a file moved on
+    // disk — and leave nothing to repair once the file is found again. They sit
+    // there unreadable, the pool says which file is gone, and the export refuses
+    // until it is either found or removed on purpose.
+    const restored = projectTimeline(project)
+    const timeline = withBlocks(restored, restored.blocks)
+    const source = opened[0]!
+
+    set({
+      media: opened,
+      missingMedia: missing,
+      source,
+      phase: 'preparing',
+      history: createHistory(timeline),
+      projectPath: path,
+      savedMark: { timeline, media: opened },
+    })
+    rememberProject(path)
+
+    void api
+      .capabilities()
+      .then((capabilities) => set({ capabilities }))
+      .catch(() => undefined)
+
+    await loadPreview(source, token)
+    if (get().mediaToken !== token) return
+    set({ phase: 'ready' })
+
+    for (const medium of opened) {
+      loadFrames(medium, token)
+      loadKeyframes(medium, token)
+    }
+  },
+
+  /**
+   * Points a missing medium at the file it moved to.
+   *
+   * Every block that read from the old path is rewritten to the new one, so the
+   * edit survives the file having been moved or renamed — which is the whole
+   * reason a project stores paths and re-reads them rather than storing the
+   * media itself.
+   */
+  async locateMedium(missingPath, found) {
+    const token = get().mediaToken
+
+    let source: MediaSourceInfo
+    try {
+      source = await api.openMedia(found)
+    } catch (error) {
+      get().reportError(error)
+      return
+    }
+    if (get().mediaToken !== token) return
+
+    set((state) => {
+      const blocks = state.history.present.blocks.map((block) =>
+        block.mediaId === missingPath ? { ...block, mediaId: source.path } : block,
+      )
+
+      return {
+        media: state.media.some((medium) => medium.path === source.path)
+          ? state.media
+          : [...state.media, source],
+        missingMedia: state.missingMedia.filter((path) => path !== missingPath),
+        history: record(state.history, withBlocks(state.history.present, blocks)),
+      }
+    })
+
+    await loadPreview(source, token)
+    loadFrames(source, token)
+    loadKeyframes(source, token)
+  },
+
+  dropMissingMedium(missingPath) {
+    set((state) => ({
+      missingMedia: state.missingMedia.filter((path) => path !== missingPath),
+      history: record(
+        state.history,
+        withBlocks(
+          state.history.present,
+          state.history.present.blocks.filter((block) => block.mediaId !== missingPath),
+        ),
+      ),
+    }))
+  },
+
   undo() {
     if (!canUndo(get().history)) return
     const history = undoHistory(get().history)
@@ -914,8 +1200,10 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   async runExport(spec, destination) {
-    const { history, source } = get()
-    if (!source || history.present.blocks.length === 0) return
+    const { history, source, missingMedia } = get()
+    // A timeline naming a file that is not there would fail at the first frame
+    // with a message about a path rather than about the edit.
+    if (!source || history.present.blocks.length === 0 || missingMedia.length > 0) return
 
     const jobId = crypto.randomUUID()
 
@@ -1046,6 +1334,20 @@ export const selectSelectionCovers = (state: EditorState): boolean =>
   state.selection !== null && coveredSpan(state.history.present, state.selection) !== null
 
 /**
+ * Whether anything has changed since the last save.
+ *
+ * Identity, not contents: the store replaces the timeline and the media array
+ * wholesale on every edit, so this says exactly as much as a deep comparison
+ * would and costs nothing on a render. Never saved and nothing open is not
+ * unsaved work — there is nothing to lose.
+ */
+export const selectDirty = (state: EditorState): boolean => {
+  if (state.media.length === 0) return false
+  if (!state.savedMark) return true
+  return state.savedMark.timeline !== state.history.present || state.savedMark.media !== state.media
+}
+
+/**
  * Whether there is anything to export.
  *
  * An empty timeline is a legitimate state — deleting the last block is how you
@@ -1053,7 +1355,7 @@ export const selectSelectionCovers = (state: EditorState): boolean =>
  * the export dialog reads this.
  */
 export const selectCanExport = (state: EditorState): boolean =>
-  state.history.present.blocks.length > 0
+  state.history.present.blocks.length > 0 && state.missingMedia.length === 0
 
 /** Whether any medium in the project has reported its cut points yet. */
 export const selectHasCutPoints = (state: EditorState): boolean =>

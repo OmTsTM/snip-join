@@ -318,6 +318,27 @@ media falls back to the ordinary locations rather than failing every write.
   resulting `scroll` event, because the canvas moving under a stationary pointer
   fires no `pointermove` of its own.
 
+## Projects
+
+A `.snipjoin` file is paths and cuts, nothing else. Everything that can be read
+again from the media is read again on open, so a project is a few kilobytes and
+cannot go stale against the files it names. Block ids are left out: they are
+per-session counters with no meaning outside the run that minted them.
+
+- The renderer has no filesystem capability, so `save_project` / `load_project`
+  are commands. The write goes through a scratch file and a rename — this is the
+  one file the application produces that cannot be produced again.
+- **A missing medium keeps its blocks.** Dropping them would rewrite someone's
+  edit to match an accident on disk and leave nothing to repair. The pool lists
+  the file as missing, the export refuses, and the user chooses: say where it
+  went, or remove it and its blocks on purpose.
+- **`onCloseRequested` needs `core:window:allow-destroy`.** The JS helper works
+  by preventing the close and calling `destroy()` itself when the handler does
+  not object — so without that permission, attaching a close handler stops the
+  window closing *at all*, silently, including from the title bar.
+- Autosave only writes a project that already has a path. Choosing a name and a
+  place on the user's behalf while they are editing is not a rescue.
+
 ## Security posture
 
 - The renderer has **no** filesystem, shell or HTTP capability. See

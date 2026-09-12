@@ -312,3 +312,36 @@ export const EdgeScroll = (props: IconProps) => (
     <path d="M11 12h2" />
   </Icon>
 )
+
+/** A saved edit: the mark for a project file. */
+export const Project = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M3.5 7.5a2 2 0 0 1 2-2h3.2l1.6 2h8.2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5.5a2 2 0 0 1-2-2z" />
+    <path d="M9 13.5h6" />
+  </Icon>
+)
+
+/** Writing to disk. */
+export const Save = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M5 4.5h11L19.5 8v11.5a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-14a1 1 0 0 1 1-1z" />
+    <path d="M8 4.5v5h7v-5" />
+    <path d="M7.5 20.5v-6h9v6" />
+  </Icon>
+)
+
+/** A file that is no longer where the project left it. */
+export const Broken = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M9 9l6 6M15 9l-6 6" />
+  </Icon>
+)
+
+/** Pointing the editor at a file that moved. */
+export const Locate = (props: IconProps) => (
+  <Icon {...props}>
+    <circle cx="11" cy="11" r="6" />
+    <path d="M15.5 15.5 20.5 20.5" />
+  </Icon>
+)

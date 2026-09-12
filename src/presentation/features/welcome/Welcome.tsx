@@ -7,6 +7,7 @@ import { useOpenVideo } from '@presentation/features/chrome/OpenAnother'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { useEditor } from '@presentation/state/editorStore'
 
+import { RecentProjects } from './RecentProjects'
 import { SnipDemo } from './SnipDemo'
 
 export function Welcome({ dropActive }: { readonly dropActive: boolean }) {
@@ -45,6 +46,8 @@ export function Welcome({ dropActive }: { readonly dropActive: boolean }) {
         </Button>
 
         <p className="mt-6 text-[11.5px] tracking-wide text-faint">{t('welcome.formats')}</p>
+
+        <RecentProjects />
 
         {/* Only on the welcome screen and in the shortcut sheet: a credit that
             is reachable but never sits beside anything being edited. */}
