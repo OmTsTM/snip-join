@@ -208,20 +208,35 @@ export const BlockCard = memo(function BlockCard({
     [beginGesture, block.id, settledLeft, onDragStateChange, selectBlock, setSelection],
   )
 
-  const move = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!dragging) return
+  /**
+   * Read through a ref so the subscription below does not have to be rebuilt.
+   *
+   * `placeAt` is a new function on every move — it closes over the timeline, and
+   * the timeline is what the move just changed. Listing it as a dependency would
+   * tear down and re-attach a window listener sixty times a second.
+   */
+  const place = useRef(placeAt)
+  place.current = placeAt
 
-      const canvas = event.currentTarget.closest('[data-timeline-canvas]') as HTMLElement | null
-      if (!canvas) return
-
-      lastPointerX.current = event.clientX
-      placeAt(event.clientX, canvas)
-    },
-    [dragging, placeAt],
-  )
-
-  // Replayed whenever the dock scrolls itself out from under a still pointer.
+  /**
+   * The whole of the drag, listened for on the window.
+   *
+   * Not on the handle. Pointer capture is supposed to keep the moves coming back
+   * to the element that was pressed wherever the pointer goes, and it does not
+   * survive this card: the block is re-ordered in a keyed list as it travels, so
+   * its node is moved in the document and Chromium drops the capture. What was
+   * left worked only while the pointer happened to stay over the handle itself —
+   * which is what a purely sideways drag does, the card following underneath it.
+   * Move the pointer twenty pixels down onto the filmstrip and the events went to
+   * an element with no handler, so the block stopped following and appeared to
+   * jam. The window hears every move regardless of what is underneath, so there
+   * is nothing left to lose.
+   *
+   * The scroll is listened for in the same place: the dock scrolls itself when a
+   * drag reaches the edge of the view, which moves the canvas out from under a
+   * pointer that has not moved, and replaying the last position is what keeps the
+   * block with the pointer instead of freezing as the view travels.
+   */
   useEffect(() => {
     if (!dragging) return
 
@@ -229,10 +244,19 @@ export const BlockCard = memo(function BlockCard({
     const viewport = canvas?.parentElement
     if (!canvas || !viewport) return
 
-    const onScroll = () => placeAt(lastPointerX.current, canvas)
+    const onMove = (event: PointerEvent) => {
+      lastPointerX.current = event.clientX
+      place.current(event.clientX, canvas)
+    }
+    const onScroll = () => place.current(lastPointerX.current, canvas)
+
+    window.addEventListener('pointermove', onMove)
     viewport.addEventListener('scroll', onScroll)
-    return () => viewport.removeEventListener('scroll', onScroll)
-  }, [dragging, placeAt])
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      viewport.removeEventListener('scroll', onScroll)
+    }
+  }, [dragging])
 
   const finishMove = useCallback(() => {
     // Cleared with the drag flag, so the card goes from the pointer's position
@@ -412,12 +436,11 @@ export const BlockCard = memo(function BlockCard({
         {/* The grab handle. Knurled so it reads as something to hold. */}
         <div
           onPointerDown={startMove}
-          onPointerMove={move}
           onPointerUp={endMove}
           onPointerCancel={endMove}
           title={`${t('blocks.drag')} · ${formatTimecode(spanDuration(block.source))}`}
           className={cx(
-            'knurl relative flex items-center gap-1.5 px-1.5',
+            'knurl relative flex touch-none items-center gap-1.5 px-1.5',
             'cursor-grab active:cursor-grabbing',
             dragging
               ? 'bg-snip text-ink'

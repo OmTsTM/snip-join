@@ -95,6 +95,7 @@ export const zh: Catalogue = {
   'blocks.trimStart': '调整起点',
   'blocks.trimEnd': '调整终点',
   'blocks.hole': '空缺',
+  'blocks.reorderRow': '拖动以调整顺序',
   'blocks.reorderHint': '按住手柄拖动片段即可调整顺序。',
   'blocks.moveHint': '按住手柄拖动片段即可在时间线上移动。',
 

@@ -143,6 +143,12 @@ export const Folder = (props: IconProps) => (
   </Icon>
 )
 
+export const Grip = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
+  </Icon>
+)
+
 export const Trash = (props: IconProps) => (
   <Icon {...props}>
     <path d="M4.5 6.5h15" />

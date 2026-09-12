@@ -19,6 +19,7 @@ import {
   moveBlock,
   removeBlock,
   removeSpan,
+  reorderBlock,
   setMode,
   shiftBlock,
   sourceAt,
@@ -513,5 +514,49 @@ describe('no two blocks ever claim the same instant', () => {
     timeline = shiftBlock(timeline, timeline.blocks[1]!.id, 1)
 
     expect(overlapping(timeline)).toBe(false)
+  })
+})
+
+describe('reordering from the list rather than the track', () => {
+  const three = () => splitAt(splitAt(fresh('join'), 20), 40)
+
+  it('puts a block at the index it was dropped on, with the ends joined', () => {
+    const timeline = three()
+    const last = timeline.blocks[2]!.id
+
+    expect(layout(reorderBlock(timeline, last, 0))).toEqual([
+      { start: 0, source: [40, 60] },
+      { start: 20, source: [0, 20] },
+      { start: 40, source: [20, 40] },
+    ])
+  })
+
+  /**
+   * With holes allowed the arrangement is the user's. Reordering the list moves
+   * who occupies each place; it must not quietly close a hole they put there.
+   */
+  it('keeps the first start and every hole when holes are allowed', () => {
+    const timeline = removeSpan(setMode(three(), 'gap'), span(20, 25))
+    const before = gaps(timeline)
+    const reordered = reorderBlock(timeline, timeline.blocks[2]!.id, 0)
+
+    expect(gaps(reordered).map((hole) => hole.end - hole.start)).toEqual(
+      before.map((hole) => hole.end - hole.start),
+    )
+    expect(reordered.blocks[0]!.source).toEqual(span(40, 60))
+    expect(reordered.blocks[0]!.start).toBe(timeline.blocks[0]!.start)
+  })
+
+  it('does nothing for an index it already sits at, or a block it does not have', () => {
+    const timeline = three()
+    expect(reorderBlock(timeline, timeline.blocks[1]!.id, 1)).toBe(timeline)
+    expect(reorderBlock(timeline, 'nope' as never, 0)).toBe(timeline)
+  })
+
+  it('clamps an index past either end', () => {
+    const timeline = three()
+    const first = timeline.blocks[0]!.id
+    expect(reorderBlock(timeline, first, 99).blocks[2]!.source).toEqual(span(0, 20))
+    expect(reorderBlock(timeline, first, -5)).toBe(timeline)
   })
 })

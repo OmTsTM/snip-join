@@ -40,6 +40,7 @@ import {
   moveBlock as moveBlockIn,
   removeBlock as removeBlockIn,
   removeSpan,
+  reorderBlock as reorderBlockIn,
   setMode as setModeIn,
   shiftBlock as shiftBlockIn,
   splitAt,
@@ -277,6 +278,8 @@ interface EditorState {
   selectBlock: (id: BlockId | null) => void
   /** Moves a block one place along the running order. */
   shiftBlock: (id: BlockId, direction: 1 | -1) => void
+  /** Moves a block to a place in the running order, as the block list's drag does. */
+  reorderBlock: (id: BlockId, toIndex: number) => void
   duplicateBlock: (id: BlockId) => void
   copyBlock: (id: BlockId) => void
   cutBlock: (id: BlockId) => void
@@ -905,6 +908,15 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ history: record(history, next), selectedBlock: id })
   },
 
+  reorderBlock(id, toIndex) {
+    const { history } = get()
+    const next = reorderBlockIn(history.present, id, toIndex)
+    if (next === history.present) return
+    // One undo step for the whole drag: the list only reports where the block
+    // was let go, not every row it passed over on the way.
+    set({ history: record(history, next), selectedBlock: id })
+  },
+
   duplicateBlock(id) {
     const { history } = get()
     const { timeline, inserted } = duplicateBlockIn(history.present, id)
@@ -1063,11 +1075,22 @@ export const useEditor = create<EditorState>((set, get) => ({
       .then((capabilities) => set({ capabilities }))
       .catch(() => undefined)
 
+    // Every medium, not only the first. A project is the one place several
+    // files arrive at once, and the preview is what the player reads: preparing
+    // just the first left the picture there until the playhead crossed into the
+    // second file and then showed nothing at all - a project that had reopened
+    // correctly in every other respect and looked broken.
+    //
+    // The first is awaited because `ready` means "there is something to watch",
+    // and the rest follow behind it: the timeline is usable while they render,
+    // and waiting for all of them would hold the editor shut for as long as the
+    // slowest file takes.
     await loadPreview(source, token)
     if (get().mediaToken !== token) return
     set({ phase: 'ready' })
 
     for (const medium of opened) {
+      if (medium.path !== source.path) void loadPreview(medium, token)
       loadFrames(medium, token)
       loadKeyframes(medium, token)
     }

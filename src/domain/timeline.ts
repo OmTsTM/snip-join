@@ -415,6 +415,45 @@ export function duplicateBlock(
 }
 
 /**
+ * Moves a block to a place in the running order.
+ *
+ * What the block list's own drag produces: there the pieces are a list and a
+ * list has indices, where on the timeline they are a length of film and have
+ * positions. The two modes disagree about which of those is real, so this says
+ * both — with the ends joined the index *is* the answer, and with holes allowed
+ * the arrangement is kept and only its occupants change places: the first start
+ * and every gap between neighbours survive, so reordering a list cannot quietly
+ * close a hole the user put there.
+ */
+export function reorderBlock(timeline: Timeline, id: BlockId, toIndex: number): Timeline {
+  const ordered = sorted(timeline.blocks)
+  const from = ordered.findIndex((block) => block.id === id)
+  if (from === -1) return timeline
+
+  const to = Math.max(0, Math.min(Math.round(toIndex), ordered.length - 1))
+  if (to === from) return timeline
+
+  const next = [...ordered]
+  const [lifted] = next.splice(from, 1)
+  next.splice(to, 0, lifted!)
+
+  if (timeline.mode === 'join') return settle(timeline, next)
+
+  const holes = ordered
+    .slice(1)
+    .map((block, index) => Math.max(0, block.start - blockEnd(ordered[index]!)))
+
+  let cursor = ordered[0]!.start
+  const placed = next.map((block, index) => {
+    const at = cursor
+    cursor = at + duration(block.source) + (holes[index] ?? 0)
+    return { ...block, start: at }
+  })
+
+  return settle(timeline, placed)
+}
+
+/**
  * Swaps a block with the one beside it.
  *
  * The keyboard counterpart to dragging, and the reason reordering does not

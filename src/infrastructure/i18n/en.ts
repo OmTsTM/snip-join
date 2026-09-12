@@ -101,6 +101,7 @@ export const en = {
   'blocks.trimStart': 'Trim the start',
   'blocks.trimEnd': 'Trim the end',
   'blocks.hole': 'Hole',
+  'blocks.reorderRow': 'Drag to change the order',
   'blocks.reorderHint': 'Drag a block by its handle to change the order.',
   'blocks.moveHint': 'Drag a block by its handle to move it along the timeline.',
 

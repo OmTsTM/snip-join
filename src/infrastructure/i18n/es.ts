@@ -98,6 +98,7 @@ export const es: Catalogue = {
   'blocks.trimStart': 'Ajustar el inicio',
   'blocks.trimEnd': 'Ajustar el final',
   'blocks.hole': 'Hueco',
+  'blocks.reorderRow': 'Arrastra para cambiar el orden',
   'blocks.reorderHint': 'Arrastra un bloque por su asa para cambiar el orden.',
   'blocks.moveHint': 'Arrastra un bloque por su asa para moverlo por la línea de tiempo.',
 

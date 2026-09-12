@@ -98,6 +98,7 @@ export const ptBR: Catalogue = {
   'blocks.trimStart': 'Ajustar o início',
   'blocks.trimEnd': 'Ajustar o fim',
   'blocks.hole': 'Buraco',
+  'blocks.reorderRow': 'Arraste para mudar a ordem',
   'blocks.reorderHint': 'Arraste um bloco pela alça para mudar a ordem.',
   'blocks.moveHint': 'Arraste um bloco pela alça para movê-lo na linha do tempo.',
 

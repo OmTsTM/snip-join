@@ -36,6 +36,7 @@ precision and finish of a paid tool.
 ## Contents
 
 - [What it does](#what-it-does)
+- [Keeping the work](#keeping-the-work)
 - [Cutting without re-encoding](#cutting-without-re-encoding)
 - [Exporting](#exporting)
 - [Sizing the timeline](#sizing-the-timeline)
@@ -97,6 +98,12 @@ it aside, `Ctrl`+`V` drops it back in at the playhead, and `Alt`+`←` `→` wal
 along the running order without going near the handle. Right-click for the same
 list, plus *Duplicate*.
 
+**Or reorder them as a list.** *Blocks* on the right is the running order written
+out, and a row can be dragged up or down by its grip to change it — the timeline
+follows. Finding room in a strip is one way to say "play this third"; dropping a
+row between two others is the other, and holes you left on the timeline are kept
+where they are.
+
 You can delete every block. An empty timeline is a fresh start, not a dead end —
 the files stay in *Media*, and dragging one back in starts the edit again.
 
@@ -116,6 +123,28 @@ deleting anything, so you can drag that moment somewhere else entirely.
 10-bit, and the rest. Anything the web view cannot decode gets a lightweight
 preview copy built automatically in the background — the export always reads the
 original file.
+
+## Keeping the work
+
+An edit is a list of decisions about files that already exist, so a project is a
+small text file naming them and where each cut falls. Nothing is copied and
+nothing is locked: the video stays where it is on disk.
+
+**Save it, or don't.** *Save project* asks where the first time and afterwards
+writes back to the same file. Once it has a name it is also written every half a
+minute while you work, which is there for the power going out rather than for
+you — the most you can lose is the last half minute.
+
+**Reopen it.** Every file it names is read again from disk, because their length
+and their streams are properties of the file today rather than of the day you
+saved. A file that has moved is marked in *Media* with the choice of finding it
+again or dropping it; the blocks that read from it stay where they are until you
+decide, since an edit is not something to rewrite because a file moved.
+
+**Closing puts the editor down, not the application.** The window goes back to
+the front door, with the projects you were last in listed there — closing one
+edit is usually the moment before opening another. Unsaved work is asked about
+first. Close again from there and it really does quit.
 
 ## Cutting without re-encoding
 

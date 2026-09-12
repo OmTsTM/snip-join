@@ -78,32 +78,45 @@ export function App() {
   }, [projectPath])
 
   /**
-   * Stands between unsaved work and the window closing.
+   * Puts the editor down and goes back to the front door.
    *
-   * Tauri asks before it closes, which is the only chance there is: once the
-   * window goes the state goes with it. The answer comes back asynchronously
-   * from a dialog, so the close is refused outright and reissued afterwards if
-   * that is what was chosen — `closing` is what stops the second close being
-   * questioned all over again.
+   * Closing the editor is not quitting. One window does two jobs here — the
+   * welcome screen with its list of recent projects, and the project itself —
+   * and the close button means "I am done with this one", which almost always
+   * comes just before opening another. Leaving the application running is what
+   * turns that into one click instead of a relaunch and a splash screen.
    */
-  const closing = useRef(false)
+  const leaveProject = useCallback(() => {
+    setAskingToSave(false)
+    setExportOpen(false)
+    void useEditor.getState().closeFile()
+  }, [])
+
+  /**
+   * Stands between unsaved work and the editor being put down.
+   *
+   * Tauri asks before it closes, which is the only chance there is: the state
+   * lives in this window either way. The answer comes back asynchronously from a
+   * dialog, so the close is always refused while a project is open and the
+   * departure is made afterwards by hand. With nothing open the request is left
+   * alone and the application really does quit — the welcome screen holds no
+   * work, so there is nothing there to ask about.
+   */
   useEffect(() => {
     let detach: (() => void) | null = null
     let cancelled = false
 
     void getCurrentWindow()
       .onCloseRequested((event) => {
-        if (closing.current) return
-        const { media, history } = useEditor.getState()
+        const { media, history, savedMark } = useEditor.getState()
         if (media.length === 0) return
 
-        const mark = useEditor.getState().savedMark
-        const unsaved =
-          !mark || mark.timeline !== history.present || mark.media !== media
-        if (!unsaved) return
-
         event.preventDefault()
-        setAskingToSave(true)
+
+        const unsaved =
+          !savedMark || savedMark.timeline !== history.present || savedMark.media !== media
+        if (unsaved) setAskingToSave(true)
+        else leaveProject()
       })
       .then((unlisten) => {
         if (cancelled) unlisten()
@@ -114,22 +127,16 @@ export function App() {
       cancelled = true
       detach?.()
     }
-  }, [])
+  }, [leaveProject])
 
-  const closeForReal = useCallback(() => {
-    closing.current = true
-    setAskingToSave(false)
-    void getCurrentWindow().close()
-  }, [])
-
-  const saveThenClose = useCallback(() => {
+  const saveThenLeave = useCallback(() => {
     void saveNow().then((written) => {
-      // A dismissed picker is not a save, and closing on it would throw away the
+      // A dismissed picker is not a save, and leaving on it would throw away the
       // work the question was asked about.
-      if (written) closeForReal()
+      if (written) leaveProject()
       else setAskingToSave(false)
     })
-  }, [closeForReal, saveNow])
+  }, [leaveProject, saveNow])
 
   // The editor window is created hidden. Reporting in after the first paint is
   // what makes it appear — two frames of margin, because a layout effect runs
@@ -284,8 +291,8 @@ export function App() {
 
       <UnsavedDialog
         open={askingToSave}
-        onSave={saveThenClose}
-        onDiscard={closeForReal}
+        onSave={saveThenLeave}
+        onDiscard={leaveProject}
         onCancel={() => setAskingToSave(false)}
       />
 
