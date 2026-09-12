@@ -226,6 +226,10 @@ export const ptBR: Catalogue = {
   'shortcuts.reorder': 'Mover o bloco na ordem',
 
   'language.label': 'Idioma',
+  'skin.label': 'Aparência',
+  'skin.dusk': 'Anoitecer',
+  'skin.slate': 'Ardósia',
+  'skin.paper': 'Papel',
 
   'about.author': 'por OmTsTM',
   'about.project': 'Snip Join no GitHub',

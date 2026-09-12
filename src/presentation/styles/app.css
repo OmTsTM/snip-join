@@ -14,6 +14,17 @@
  * and nothing else. Anything that removes, marks for removal, or is about to be
  * cut is orange. Everything that joins, keeps or reassembles is paper or dusk.
  * The logo splits its own wordmark exactly that way.
+ *
+ * These names are *roles*, not colours, and the skins below fill them. `ink` is
+ * always the ground and `paper` is always what is written on it — which in the
+ * light skin means `ink` is nearly white and `paper` is nearly black. Reading
+ * them as the colours they are named after works for the dark skin they were
+ * drawn for and nowhere else; reading them as roles works everywhere.
+ *
+ * `snip` is the exception that proves it: the scissors orange is the same in
+ * every skin, because orange means cutting and a skin does not get to decide
+ * what cutting looks like. Only `snip-ink` moves, and only so that orange used
+ * as *text* stays readable on a pale ground.
  */
 @theme {
   --color-ink: #090a0b;
@@ -27,6 +38,9 @@
   --color-snip: #f9811e;
   --color-snip-bright: #ffa24d;
   --color-snip-deep: #c25f0c;
+  /* Orange where it has to be read rather than filled. Against a dark ground
+     the scissors colour is legible as it is; against a pale one it is not. */
+  --color-snip-ink: #f9811e;
 
   --color-dusk: #1b406b;
   --color-dusk-lift: #5b87bc;
@@ -41,10 +55,74 @@
   --font-sans: 'Instrument Sans Variable', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, 'Cascadia Mono', monospace;
 
+  /* The lift at the top of the application ground, so the wash is a token the
+     skins can move rather than a number buried in a gradient. */
+  --color-ground-lift: #14181c;
+
   --radius-panel: 14px;
   --radius-block: 8px;
 
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * Slate: the same interface with the lights half up.
+ *
+ * For a bright room, where the dusk skin's near-black ground turns the screen
+ * into a mirror. Everything is lifted and cooled, the contrast between the
+ * panels and the ground is kept wide enough to read the layout at a glance, and
+ * the brand colours are untouched.
+ */
+:root[data-theme='slate'] {
+  --color-ink: #262e37;
+  --color-ink-deep: #1e242c;
+  --color-panel: #2f3843;
+  --color-raised: #38434f;
+  --color-raised-hi: #434f5d;
+  --color-line: #495665;
+  --color-line-bright: #5d6c7e;
+
+  --color-dusk: #2d557f;
+  --color-dusk-lift: #7fa8d8;
+  --color-dusk-bright: #a8c8e9;
+
+  --color-paper: #f4efe7;
+  --color-muted: #bcc5d0;
+  --color-faint: #8f99a6;
+
+  --color-ground-lift: #313b46;
+}
+
+/*
+ * Paper: the traditional light interface.
+ *
+ * Grounded in the logo's own cream rather than in white, so the mark still
+ * belongs on it and the orange still reads as the scissors. `ink` and `paper`
+ * swap what they look like and keep what they mean: the ground, and what is
+ * written on it.
+ */
+:root[data-theme='paper'] {
+  --color-ink: #f5f1ea;
+  --color-ink-deep: #ece5da;
+  --color-panel: #fffdf8;
+  --color-raised: #f0e9df;
+  --color-raised-hi: #e6ddcf;
+  --color-line: #ddd3c3;
+  --color-line-bright: #c5b8a3;
+
+  --color-dusk: #1b406b;
+  --color-dusk-lift: #2f5f96;
+  --color-dusk-bright: #1b406b;
+
+  /* Orange as text needs the depth a pale ground takes away. The fill stays the
+     scissors colour; only what is read changes. */
+  --color-snip-ink: #a8520a;
+
+  --color-paper: #1c1b19;
+  --color-muted: #58534b;
+  --color-faint: #787165;
+
+  --color-ground-lift: #fffdf8;
 }
 
 @layer base {
@@ -147,10 +225,15 @@
   .app-ground {
     position: relative;
     background:
-      radial-gradient(120% 80% at 50% -20%, #14181c 0%, var(--color-ink) 55%),
+      radial-gradient(120% 80% at 50% -20%, var(--color-ground-lift) 0%, var(--color-ink) 55%),
       var(--color-ink);
   }
 
+  /*
+   * The grain only has work to do on a dark ground: it exists to break up the
+   * banding a large near-black wash picks up. On a pale one there is no banding
+   * and the noise is just dirt, so the skin turns it off.
+   */
   .app-ground::after {
     content: '';
     position: absolute;
@@ -235,6 +318,10 @@
     background: var(--color-panel);
     border: 1px solid var(--color-line);
     border-radius: var(--radius-panel);
+  }
+
+  :root[data-theme='paper'] .app-ground::after {
+    opacity: 0;
   }
 
   /* Small uppercase section label. Letter-spaced so it reads as a label rather

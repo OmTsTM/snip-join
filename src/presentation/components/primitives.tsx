@@ -78,7 +78,7 @@ export function IconButton({ label, active, className, children, ...rest }: Icon
       className={cx(
         'inline-flex h-8 w-8 items-center justify-center rounded-lg',
         'transition-colors duration-150 disabled:pointer-events-none disabled:opacity-30',
-        active ? 'bg-snip/15 text-snip' : 'text-muted hover:bg-raised hover:text-paper',
+        active ? 'bg-snip/15 text-snip-ink' : 'text-muted hover:bg-raised hover:text-paper',
         className,
       )}
       {...rest}

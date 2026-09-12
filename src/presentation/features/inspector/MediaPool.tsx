@@ -340,7 +340,7 @@ function MissingRow({ path }: { readonly path: string }) {
     <li>
       <div className="group flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors duration-150 hover:bg-raised/60">
         <span
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] bg-snip/15 text-snip"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[5px] bg-snip/15 text-snip-ink"
           title={t('media.missing')}
         >
           <Broken size={13} />
@@ -351,7 +351,7 @@ ${t('media.missing')}`}>
           <span className="block truncate text-[12px] text-muted line-through decoration-snip/50">
             {name}
           </span>
-          <span className="block truncate text-[10.5px] text-snip">{t('media.missing')}</span>
+          <span className="block truncate text-[10.5px] text-snip-ink">{t('media.missing')}</span>
         </span>
 
         <span className="flex shrink-0 items-center">

@@ -143,7 +143,7 @@ function Readout({
       <div
         className={cx(
           'timecode text-[11.5px] font-medium',
-          accent ? 'text-snip' : 'text-paper',
+          accent ? 'text-snip-ink' : 'text-paper',
         )}
       >
         {value}

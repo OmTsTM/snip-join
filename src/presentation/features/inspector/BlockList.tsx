@@ -155,7 +155,7 @@ export function BlockList() {
                     disabled={count <= 1}
                     title={t('blocks.delete')}
                     aria-label={t('blocks.delete')}
-                    className="shrink-0 rounded-md p-1.5 text-faint opacity-0 transition-[opacity,color] duration-150 hover:text-snip focus-visible:opacity-100 group-hover:opacity-100 disabled:pointer-events-none"
+                    className="shrink-0 rounded-md p-1.5 text-faint opacity-0 transition-[opacity,color] duration-150 hover:text-snip-ink focus-visible:opacity-100 group-hover:opacity-100 disabled:pointer-events-none"
                   >
                     <Trash size={14} />
                   </button>

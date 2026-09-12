@@ -75,7 +75,7 @@ export function OpenAnother() {
       onClick={() => void choose()}
       title={t('source.open')}
       aria-label={t('source.open')}
-      className="no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-faint transition-colors duration-150 hover:bg-raised hover:text-paper"
+      className="no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-muted transition-colors duration-150 hover:bg-raised hover:text-paper"
     >
       <Folder size={13} />
       {t('source.open')}
@@ -100,7 +100,7 @@ export function OpenProject() {
       onClick={() => void openExisting()}
       title={t('project.open')}
       aria-label={t('project.open')}
-      className="no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-faint transition-colors duration-150 hover:bg-raised hover:text-paper"
+      className="no-drag inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-muted transition-colors duration-150 hover:bg-raised hover:text-paper"
     >
       <Project size={13} />
       {t('project.open')}

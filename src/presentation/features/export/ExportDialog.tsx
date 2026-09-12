@@ -501,7 +501,7 @@ function LosslessNote() {
   }
 
   return (
-    <p className="mt-2 text-[11.5px] leading-snug text-snip">
+    <p className="mt-2 text-[11.5px] leading-snug text-snip-ink">
       {t('export.lossless.shift', { shift: formatDuration(Math.max(1, Math.round(accuracy.worstShift))) })}
     </p>
   )
@@ -533,8 +533,8 @@ function ModeCard({
       )}
     >
       <div className="flex items-center gap-1.5">
-        {mode === 'enhanced' && <Sparkle size={12} className={selected ? 'text-snip' : 'text-faint'} />}
-        <span className={cx('text-[12.5px] font-semibold', selected ? 'text-snip' : 'text-paper')}>
+        {mode === 'enhanced' && <Sparkle size={12} className={selected ? 'text-snip-ink' : 'text-faint'} />}
+        <span className={cx('text-[12.5px] font-semibold', selected ? 'text-snip-ink' : 'text-paper')}>
           {t(`export.mode.${mode}` as MessageKey)}
         </span>
       </div>

@@ -89,6 +89,32 @@ the length its preview copy is built at so scrubbing cannot run past the picture
 without closing the file; the media pool still holds everything. What it is not
 is exportable, which `selectCanExport` gates.
 
+## Skins
+
+Three: `dusk` (the default, and the one the editor was designed around), `slate`
+and `paper`. A skin is a block of custom properties on `:root[data-theme=…]`;
+the default writes no attribute at all, so a fresh install renders the palette
+in `@theme` with nothing overridden.
+
+The palette names are **roles**, not colours. `ink` is always the ground and
+`paper` is always what is written on it — which in the light skin means `ink` is
+nearly white and `paper` is nearly black. Anything that reads them as the colours
+they are named after breaks the moment a second skin exists.
+
+Two things do not move with the skin:
+
+- **The scissors orange.** `--color-snip` is the logo's `#F9811E` in every skin,
+  because orange means cutting and a skin does not get to decide what cutting
+  looks like. Only `--color-snip-ink` moves, and only so that orange used as
+  *text* survives a pale ground — `text-snip` is for a fill, `text-snip-ink` for
+  something to be read.
+- **The splash.** It is a two and a half second brand moment with its own inline
+  stylesheet, and it stays the window at dusk.
+
+The title bar's controls are `text-muted`, never `text-faint`: they are the only
+controls on screen with no panel behind them, sitting on the darkest band the
+interface has, and `faint` left them at about three to one against it.
+
 ## Colour rule
 
 The palette is sampled from `logo.png`, not invented: `#F9811E` is the scissors,

@@ -345,3 +345,13 @@ export const Locate = (props: IconProps) => (
     <path d="M15.5 15.5 20.5 20.5" />
   </Icon>
 )
+
+/** Choosing how the interface looks. */
+export const Palette = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.2 0 1.9-.8 1.9-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.8-1.6 1.7-1.6h1.1a4.8 4.8 0 0 0 4.8-4.8c0-3.7-3.8-6.6-8.5-6.6z" />
+    <circle cx="7.8" cy="11.5" r="1.1" />
+    <circle cx="10.6" cy="7.9" r="1.1" />
+    <circle cx="15.2" cy="8.6" r="1.1" />
+  </Icon>
+)

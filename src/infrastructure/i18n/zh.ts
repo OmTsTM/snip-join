@@ -220,6 +220,10 @@ export const zh: Catalogue = {
   'shortcuts.reorder': '在顺序中移动片段',
 
   'language.label': '语言',
+  'skin.label': '外观',
+  'skin.dusk': '暮色',
+  'skin.slate': '石板',
+  'skin.paper': '纸白',
 
   'about.author': '作者 OmTsTM',
   'about.project': 'GitHub 上的 Snip Join',

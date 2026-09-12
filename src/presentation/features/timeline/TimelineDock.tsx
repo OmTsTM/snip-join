@@ -433,7 +433,7 @@ export function TimelineDock() {
               : t('timeline.length', { length: formatDuration(kept) })}
           </span>
           {removed > 0.05 && (
-            <span className="text-snip">{t('timeline.removed', { removed: formatDuration(removed) })}</span>
+            <span className="text-snip-ink">{t('timeline.removed', { removed: formatDuration(removed) })}</span>
           )}
         </div>
 

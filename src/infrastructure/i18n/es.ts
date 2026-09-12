@@ -225,6 +225,10 @@ export const es: Catalogue = {
   'shortcuts.reorder': 'Mover el bloque en el orden',
 
   'language.label': 'Idioma',
+  'skin.label': 'Apariencia',
+  'skin.dusk': 'Anochecer',
+  'skin.slate': 'Pizarra',
+  'skin.paper': 'Papel',
 
   'about.author': 'por OmTsTM',
   'about.project': 'Snip Join en GitHub',

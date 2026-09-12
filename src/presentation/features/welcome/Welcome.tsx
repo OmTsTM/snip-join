@@ -65,7 +65,7 @@ export function Welcome({ dropActive }: { readonly dropActive: boolean }) {
             transition={{ duration: 0.16 }}
             className="pointer-events-none absolute inset-4 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-snip bg-ink/85 backdrop-blur-sm"
           >
-            <span className="font-display text-[20px] font-semibold text-snip">
+            <span className="font-display text-[20px] font-semibold text-snip-ink">
               {t('welcome.dropNow')}
             </span>
           </motion.div>

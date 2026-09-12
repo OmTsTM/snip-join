@@ -228,6 +228,10 @@ export const en = {
   'shortcuts.reorder': 'Move the block along the order',
 
   'language.label': 'Language',
+  'skin.label': 'Appearance',
+  'skin.dusk': 'Dusk',
+  'skin.slate': 'Slate',
+  'skin.paper': 'Paper',
 
   'about.author': 'by OmTsTM',
   'about.project': 'Snip Join on GitHub',

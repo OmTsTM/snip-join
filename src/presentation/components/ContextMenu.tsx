@@ -147,7 +147,7 @@ export function ContextMenu({ at, entries, onClose }: ContextMenuProps) {
               'flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[12.5px]',
               'transition-colors duration-100 disabled:pointer-events-none disabled:opacity-30',
               entry.tone === 'snip'
-                ? 'text-muted hover:bg-snip/15 hover:text-snip'
+                ? 'text-muted hover:bg-snip/15 hover:text-snip-ink'
                 : 'text-muted hover:bg-raised hover:text-paper',
             )}
           >

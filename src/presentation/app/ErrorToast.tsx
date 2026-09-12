@@ -41,7 +41,7 @@ export function ErrorToast() {
           className="fixed bottom-5 left-1/2 z-[60] w-[min(520px,calc(100vw-40px))] -translate-x-1/2"
         >
           <div className="flex items-start gap-3 rounded-xl border border-snip/40 bg-panel p-4 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.9)]">
-            <span className="mt-px shrink-0 text-snip">
+            <span className="mt-px shrink-0 text-snip-ink">
               <Alert size={17} />
             </span>
 

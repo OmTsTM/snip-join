@@ -3,10 +3,11 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useCallback } from 'react'
 
 import brandMark from '@presentation/assets/brand-mark.png'
-import { Close, Globe, Keyboard, Maximize, Minimize } from '@presentation/components/Icons'
+import { Close, Globe, Keyboard, Maximize, Minimize, Palette } from '@presentation/components/Icons'
 import { cx } from '@presentation/components/primitives'
 import { useI18n } from '@presentation/i18n/I18nProvider'
 import { LOCALES, LOCALE_NAMES, type Locale } from '@infrastructure/i18n'
+import { SKINS, useSkin, type Skin } from './skins'
 import { selectDuration, useEditor } from '@presentation/state/editorStore'
 import { displaySize } from '@domain/media'
 import { OpenAnother, OpenProject } from './OpenAnother'
@@ -28,8 +29,21 @@ import { formatTimecode } from '@domain/time'
  */
 const PROJECT_URL = 'https://github.com/OmTsTM/snip-join'
 
+/**
+ * The class every control in the title bar is written in.
+ *
+ * `muted`, not `faint`. These are the only controls on screen with no panel
+ * behind them, sitting on the darkest band the interface has, and `faint` left
+ * them at about three to one against it — legible if you already knew they were
+ * there. It is a role rather than a colour, so every skin lifts them by its own
+ * lights rather than by this one's.
+ */
+const CHROME_TEXT = 'text-muted transition-colors duration-150 hover:bg-raised hover:text-paper'
+
 export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => void }) {
   const { t, locale, setLocale } = useI18n()
+  const skin = useSkin((state) => state.skin)
+  const setSkin = useSkin((state) => state.setSkin)
   const source = useEditor((state) => state.source)
   const duration = useEditor(selectDuration)
 
@@ -64,7 +78,7 @@ export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => 
         <img src={brandMark} alt="" width={20} height={20} className="shrink-0 rounded-[5px]" />
 
         <span className="font-display text-[13px] font-semibold tracking-tight text-paper">
-          <span className="text-snip">Snip</span>Join
+          <span className="text-snip-ink">Snip</span>Join
         </span>
       </button>
 
@@ -105,11 +119,12 @@ export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => 
         onClick={onShowShortcuts}
         title={t('shortcuts.show')}
         aria-label={t('shortcuts.show')}
-        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-faint transition-colors duration-150 hover:bg-raised hover:text-paper"
+        className={cx('inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md', CHROME_TEXT)}
       >
         <Keyboard size={14} />
       </button>
 
+      <SkinPicker current={skin} onPick={setSkin} label={t('skin.label')} />
       <LanguagePicker current={locale} onPick={setLocale} label={t('language.label')} />
 
       <div className="flex h-full shrink-0">
@@ -145,7 +160,7 @@ function WindowButton({
       aria-label={label}
       onClick={onClick}
       className={cx(
-        'inline-flex h-full w-11 items-center justify-center text-faint transition-colors duration-150',
+        'inline-flex h-full w-11 items-center justify-center text-muted transition-colors duration-150',
         danger ? 'hover:bg-[#c0392b] hover:text-white' : 'hover:bg-raised hover:text-paper',
       )}
     >
@@ -169,7 +184,7 @@ function LanguagePicker({
         type="button"
         title={label}
         aria-label={label}
-        className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px] text-faint transition-colors duration-150 hover:bg-raised hover:text-paper"
+        className={cx('inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[11.5px]', CHROME_TEXT)}
       >
         <Globe size={13} />
         {LOCALE_NAMES[current]}
@@ -189,6 +204,56 @@ function LanguagePicker({
             )}
           >
             {LOCALE_NAMES[locale]}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Which skin the interface wears.
+ *
+ * Beside the language for a reason: both are choices about the window rather
+ * than about the edit, both outlive every file, and neither belongs anywhere
+ * near the timeline. Built the same way, so one is not a second thing to learn.
+ */
+function SkinPicker({
+  current,
+  onPick,
+  label,
+}: {
+  readonly current: Skin
+  readonly onPick: (skin: Skin) => void
+  readonly label: string
+}) {
+  const t = useI18n().t
+
+  return (
+    <div className="group relative shrink-0">
+      <button
+        type="button"
+        title={label}
+        aria-label={label}
+        className={cx('inline-flex h-7 w-7 items-center justify-center rounded-md', CHROME_TEXT)}
+      >
+        <Palette size={14} />
+      </button>
+
+      <div className="invisible absolute right-0 top-full z-40 w-36 translate-y-1 rounded-lg border border-line bg-panel p-1 opacity-0 shadow-2xl transition-[opacity,visibility] duration-150 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+        {SKINS.map((skin) => (
+          <button
+            key={skin}
+            type="button"
+            onClick={() => onPick(skin)}
+            className={cx(
+              'block w-full rounded-md px-2.5 py-1.5 text-left text-[12px] transition-colors duration-150',
+              skin === current
+                ? 'bg-raised-hi text-paper'
+                : 'text-muted hover:bg-raised hover:text-paper',
+            )}
+          >
+            {t(`skin.${skin}`)}
           </button>
         ))}
       </div>
