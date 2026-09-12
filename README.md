@@ -86,8 +86,10 @@ placing it anywhere on the timeline. Carry one past its neighbour and the two
 glide into each other's places while you watch — no block is ever drawn on top
 of another. Drag an edge to trim; an edge stops where the next block begins. A
 torn orange edge marks a seam you made; a clean edge is the original boundary.
-Reach the side of the window and the timeline follows you, so the far end of a
-long block is never out of reach.
+Turn on the follow control in the timeline's toolbar and reaching the side of
+the window scrolls the view, so the far end of a long block is never out of
+reach; it is off by default, because a view that moves on its own while you are
+holding something is not always what you want.
 
 **Pick a block up.** Click one and it wears a pale ring: that is the piece the
 keyboard is about to act on. `Delete` removes it, `Ctrl`+`C` and `Ctrl`+`X` put
@@ -200,6 +202,8 @@ The size is remembered between sessions.
 | `Ctrl` + `E` | Export |
 | `Ctrl` + wheel | Zoom the timeline around the pointer |
 | `↑` `↓` on the divider | Resize the timeline |
+
+The mark in the title bar opens this page.
 
 ## Languages
 

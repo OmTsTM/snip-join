@@ -1,3 +1,4 @@
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useCallback } from 'react'
 
@@ -18,10 +19,23 @@ import { formatTimecode } from '@domain/time'
  * the language control, which would otherwise need a menu bar this application
  * has no other use for.
  */
+/**
+ * Where the mark in the title bar leads.
+ *
+ * The capability in `src-tauri/capabilities/default.json` is scoped to this
+ * address and the credit line's, so the renderer cannot be talked into opening
+ * a third.
+ */
+const PROJECT_URL = 'https://github.com/OmTsTM/snip-join'
+
 export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => void }) {
   const { t, locale, setLocale } = useI18n()
   const source = useEditor((state) => state.source)
   const duration = useEditor(selectDuration)
+
+  // A machine with no browser association is not worth an error toast over a
+  // link nobody has to press.
+  const openProject = useCallback(() => void openUrl(PROJECT_URL).catch(() => {}), [])
 
   const minimize = useCallback(() => void getCurrentWindow().minimize(), [])
   const toggleMaximize = useCallback(() => void getCurrentWindow().toggleMaximize(), [])
@@ -34,17 +48,25 @@ export function TitleBar({ onShowShortcuts }: { readonly onShowShortcuts: () => 
       data-tauri-drag-region
       className="relative z-30 flex h-10 shrink-0 items-center gap-3 border-b border-line bg-ink-deep/80 pl-3 pr-0 backdrop-blur"
     >
-      <img
-        src={brandMark}
-        alt=""
-        width={20}
-        height={20}
-        className="pointer-events-none shrink-0 rounded-[5px]"
-      />
+      {/* The mark and the name are one control: the project's own page. `no-drag`
+          because the header is the window's drag region, which would otherwise
+          swallow the press. */}
+      <button
+        type="button"
+        onClick={openProject}
+        title={PROJECT_URL}
+        aria-label={t('about.project')}
+        className={cx(
+          'no-drag group flex shrink-0 items-center gap-3 rounded-md py-0.5 pr-1',
+          'transition-opacity duration-150 hover:opacity-100',
+        )}
+      >
+        <img src={brandMark} alt="" width={20} height={20} className="shrink-0 rounded-[5px]" />
 
-      <span className="pointer-events-none shrink-0 font-display text-[13px] font-semibold tracking-tight text-paper">
-        <span className="text-snip">Snip</span>Join
-      </span>
+        <span className="font-display text-[13px] font-semibold tracking-tight text-paper">
+          <span className="text-snip">Snip</span>Join
+        </span>
+      </button>
 
       <span className="timecode pointer-events-none -ml-1.5 shrink-0 text-[10px] text-faint">
         {__APP_VERSION__}

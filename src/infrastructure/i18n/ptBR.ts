@@ -89,6 +89,7 @@ export const ptBR: Catalogue = {
   'blocks.moveHint': 'Arraste um bloco pela alça para movê-lo na linha do tempo.',
 
   'timeline.snapCuts': 'Encaixar os cortes nos pontos de corte, para a exportação só copiar',
+  'timeline.edgeScroll': 'Acompanhar o arrasto até a borda da janela',
   'timeline.resize': 'Arraste para deixar a linha do tempo mais alta. Clique duplo para voltar.',
   'timeline.zoomIn': 'Aproximar',
   'timeline.zoomOut': 'Afastar',
@@ -214,5 +215,6 @@ export const ptBR: Catalogue = {
   'language.label': 'Idioma',
 
   'about.author': 'por OmTsTM',
+  'about.project': 'Snip Join no GitHub',
   'splash.tagline': 'O corte que você vê é o corte que sai.',
 }

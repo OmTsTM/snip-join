@@ -263,7 +263,15 @@ media falls back to the ordinary locations rather than failing every write.
   each gesture reads the canvas rect on every move rather than caching it — the
   view moving under a stationary pointer fires no `pointermove`, so each one
   also replays itself on `scroll`. Miss either half and the gesture freezes, or
-  runs backwards, the moment the view starts to travel.
+  runs backwards, the moment the view starts to travel. The following itself is
+  off unless `edgeScroll` is on: a view that travels while you are holding
+  something is worse than one that makes you zoom out, so it is offered in the
+  toolbar rather than imposed.
+- **A ref handed to a `motion` row does not reliably reach its node.** The block
+  list finds the chosen row with a `data-` attribute and scrolls the inspector
+  column by hand — `scrollIntoView` walked out to a list that does not overflow
+  and stopped there, which moved nothing, because the list is normally below the
+  fold in its entirety.
 - **Snapping to cut points is bounded by a distance.** `SNAP_PIXELS` in the
   store. Some files carry almost none — an animated GIF has exactly one, at the
   start — and pulling onto "the nearest one, wherever it is" dragged every edit
@@ -277,16 +285,25 @@ media falls back to the ordinary locations rather than failing every write.
   side by side each get drawn over the next — indistinguishable from an overlap.
   `MIN_BLOCK_WIDTH` is a hairline for that reason. It was once 26px because a
   still reported a fortieth of a second; a still has a real length now.
-- **A dragged block is never drawn under the pointer.** It is tempting, and it
-  is wrong: with the ends joined, position has no meaning — only the running
-  order does — so a card carried between slots is drawn across whatever it
-  passes, which reads as two blocks overlapping and is the one thing the
-  timeline promises cannot happen. The card stays in the slot `moveBlock` gave
-  it with the `left` transition switched on, so it *glides* into each new place
-  as the drag crosses a midpoint and the displaced block glides the other way.
-  With holes allowed the position is literal and already tracks the pointer, so
-  there the transition comes off instead: a continuous position must not lag
-  behind the hand moving it.
+- **A dragged block follows the pointer, and the lift has to earn it.** A block
+  lands in a *slot*, and slots are as wide as the blocks that hold them, so a
+  card pinned to its slot cannot also be under the hand moving it — pinning it
+  made a drag across two blocks feel like it had stopped, the card sitting half
+  a neighbour ahead and waiting for the next threshold. So it floats; what makes
+  that read as *held* rather than as an overlap is the lift being unmistakable
+  (`translateY(-11px) scale(0.93)`, a heavy shadow) and the slot it will drop
+  into being outlined underneath. A timid lift is worse than none: it looks
+  exactly like the bug.
+- **The release has to be heard on the window.** Pointer capture is meant to
+  deliver it to the handle wherever the pointer is, and it does not survive the
+  card being transformed out from under it mid-drag. Losing it leaves the block
+  held — still lifted, still following, with no way to put it down — so
+  `BlockCard` also listens on `window` while a drag is running.
+- **A trim must not be animated.** The width is the block's length and the
+  pointer is setting it, so a transition means the drawn edge lags the drag by
+  its own duration: on a fast shrink the card is still wide while the filmstrip
+  inside it has been laid out for the narrow result, which is the black band
+  that looked like a picture failing to load.
 - **Nothing else enforces "never overlapping" in `gap` mode.** `settle` only
   sorts there — the reflow that makes overlap impossible with the ends joined
   does not run. Every operation therefore has to keep the invariant itself:

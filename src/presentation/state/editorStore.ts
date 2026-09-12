@@ -158,6 +158,16 @@ interface EditorState {
   snapToCutPoints: boolean
 
   /**
+   * Whether a drag that reaches the side of the window scrolls the timeline.
+   *
+   * Off by default. It is the difference between a long block being reachable
+   * and not, but it also means the view moves on its own while you are holding
+   * something — and a view that moves when you did not ask it to is worse than
+   * one that makes you zoom out, so it is offered rather than imposed.
+   */
+  edgeScroll: boolean
+
+  /**
    * Height of the timeline dock in pixels.
    *
    * Lives in the store rather than in a component because the divider, the dock
@@ -215,6 +225,7 @@ interface EditorState {
    */
   snapToCutPoint: (at: number, blockId?: BlockId) => number
   setSnapToCutPoints: (enabled: boolean) => void
+  setEdgeScroll: (enabled: boolean) => void
   setTimelineHeight: (height: number) => void
   markIn: () => void
   markOut: () => void
@@ -256,6 +267,7 @@ interface EditorState {
 }
 
 const DOCK_HEIGHT_KEY = 'snipjoin.timelineHeight'
+const EDGE_SCROLL_KEY = 'snipjoin.edgeScroll'
 const VOLUME_KEY = 'snipjoin.volume'
 const MUTED_KEY = 'snipjoin.muted'
 
@@ -304,6 +316,15 @@ function readStoredVolume(): number {
 function readStoredMuted(): boolean {
   try {
     return window.localStorage.getItem(MUTED_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+/** Reads the remembered edge-scroll choice. Anything unusable means off. */
+function readStoredEdgeScroll(): boolean {
+  try {
+    return window.localStorage.getItem(EDGE_SCROLL_KEY) === 'true'
   } catch {
     return false
   }
@@ -404,6 +425,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   keyframes: {},
   keyframesTruncated: {},
   snapToCutPoints: true,
+  edgeScroll: readStoredEdgeScroll(),
   timelineHeight: readStoredDockHeight(),
 
   selectedBlock: null,
@@ -618,6 +640,11 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   setSnapToCutPoints(enabled) {
     set({ snapToCutPoints: enabled })
+  },
+
+  setEdgeScroll(enabled) {
+    set({ edgeScroll: enabled })
+    remember(EDGE_SCROLL_KEY, String(enabled))
   },
 
   setTimelineHeight(height) {

@@ -86,6 +86,7 @@ export const zh: Catalogue = {
   'blocks.moveHint': '按住手柄拖动片段即可在时间线上移动。',
 
   'timeline.snapCuts': '把切点对齐到可切位置，让导出只做复制',
+  'timeline.edgeScroll': '拖到窗口边缘时让视图跟随',
   'timeline.resize': '拖动可加高时间线，双击恢复原状。',
   'timeline.zoomIn': '放大',
   'timeline.zoomOut': '缩小',
@@ -208,5 +209,6 @@ export const zh: Catalogue = {
   'language.label': '语言',
 
   'about.author': '作者 OmTsTM',
+  'about.project': 'GitHub 上的 Snip Join',
   'splash.tagline': '所见即所剪。',
 }

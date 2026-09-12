@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 
 import { formatDuration, span } from '@domain/time'
 import { blockAt, gaps as timelineGaps } from '@domain/timeline'
-import { Fit, Magnet, Redo, Split, Undo, ZoomIn, ZoomOut } from '@presentation/components/Icons'
+import { EdgeScroll, Fit, Magnet, Redo, Split, Undo, ZoomIn, ZoomOut } from '@presentation/components/Icons'
 import { IconButton } from '@presentation/components/primitives'
 import { selectDragging, useMediaDrag } from '@presentation/features/inspector/mediaDrag'
 import { useT } from '@presentation/i18n/I18nProvider'
@@ -76,6 +76,8 @@ export function TimelineDock() {
   const stripLoading = phase !== 'empty' && (phase !== 'ready' || pendingFrames > 0)
   const snapToCutPoints = useEditor((state) => state.snapToCutPoints)
   const setSnapToCutPoints = useEditor((state) => state.setSnapToCutPoints)
+  const edgeScroll = useEditor((state) => state.edgeScroll)
+  const setEdgeScroll = useEditor((state) => state.setEdgeScroll)
   const dockHeight = useEditor((state) => state.timelineHeight)
 
   // Everything vertical is derived from the one number the divider controls, so
@@ -175,7 +177,7 @@ export function TimelineDock() {
   // trimmed, a rail being dragged. All four can reach the side of the window
   // with more timeline to go.
   const following = useDragScroll(selectFollowing)
-  const carryingAnything = draggingBlock !== null || carrying || following
+  const carryingAnything = edgeScroll && (draggingBlock !== null || carrying || following)
   useEffect(() => {
     if (!carryingAnything) return
 
@@ -400,6 +402,16 @@ export function TimelineDock() {
           disabled={!hasCutPoints}
         >
           <Magnet size={15} />
+        </IconButton>
+
+        {/* Off by default: a view that travels on its own while you are holding
+            something is worse than one that makes you zoom out first. */}
+        <IconButton
+          label={t('timeline.edgeScroll')}
+          active={edgeScroll}
+          onClick={() => setEdgeScroll(!edgeScroll)}
+        >
+          <EdgeScroll size={15} />
         </IconButton>
 
         <div className="flex-1" />

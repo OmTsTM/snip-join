@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
+import { useEffect } from 'react'
 
 import { duration as spanDuration, formatTimecode } from '@domain/time'
 import { blockEnd } from '@domain/timeline'
@@ -30,6 +31,47 @@ export function BlockList() {
 
   const count = timeline.blocks.length
 
+  /**
+   * Brings the chosen block into view.
+   *
+   * The list is the only place the source range of each piece is written down,
+   * and on an ordinary window most of it is below the fold — so choosing a block
+   * on the timeline told you nothing unless you went looking. `nearest` rather
+   * than `center`: a row already on screen should not make the list jump.
+   */
+  useEffect(() => {
+    // Found in the document rather than through a ref: these rows are motion
+    // components, and a ref handed to one does not reliably reach the node it
+    // renders.
+    const row = selectedBlock
+      ? document.querySelector<HTMLElement>(`[data-block-row="${selectedBlock}"]`)
+      : null
+    if (!row) return
+
+    // The column is found and scrolled by hand rather than left to
+    // `scrollIntoView`. The row sits in a list of its own that usually does not
+    // overflow, and asking the browser to walk two ancestors out to the column
+    // moved nothing at all — which is the only case that matters, because the
+    // list is normally entirely below the fold.
+    let scroller = row.parentElement
+    while (scroller && scroller.scrollHeight <= scroller.clientHeight) {
+      scroller = scroller.parentElement
+    }
+    if (!scroller) return
+
+    const rowBox = row.getBoundingClientRect()
+    const box = scroller.getBoundingClientRect()
+    if (rowBox.top >= box.top && rowBox.bottom <= box.bottom) return
+
+    // A row's height of margin, so the chosen one never sits flush against the
+    // edge it was scrolled to and its neighbours stay readable.
+    const margin = rowBox.height
+    scroller.scrollTop +=
+      rowBox.top < box.top
+        ? rowBox.top - box.top - margin
+        : rowBox.bottom - box.bottom + margin
+  }, [selectedBlock])
+
   return (
     <section className="panel flex shrink-0 flex-col">
       <header className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4">
@@ -48,6 +90,7 @@ export function BlockList() {
             return (
               <motion.li
                 key={block.id}
+                data-block-row={block.id}
                 layout
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}

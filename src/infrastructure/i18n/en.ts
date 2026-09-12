@@ -92,6 +92,7 @@ export const en = {
   'blocks.moveHint': 'Drag a block by its handle to move it along the timeline.',
 
   'timeline.snapCuts': 'Snap cuts to cut points, so the export can just copy',
+  'timeline.edgeScroll': 'Follow a drag to the edge of the window',
   'timeline.resize': 'Drag to make the timeline taller. Double-click to reset.',
   'timeline.zoomIn': 'Zoom in',
   'timeline.zoomOut': 'Zoom out',
@@ -216,6 +217,7 @@ export const en = {
   'language.label': 'Language',
 
   'about.author': 'by OmTsTM',
+  'about.project': 'Snip Join on GitHub',
   'splash.tagline': 'The cut you see is the cut you get.',
 } as const
 

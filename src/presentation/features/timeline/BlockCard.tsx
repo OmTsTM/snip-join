@@ -104,24 +104,35 @@ export const BlockCard = memo(function BlockCard({
   const width = Math.max(MIN_BLOCK_WIDTH, spanDuration(block.source) * pixelsPerSecond)
 
   /**
-   * A dragged card is drawn in the slot it has been given, never under the
-   * pointer.
+   * Where the card is drawn while it is in hand.
    *
-   * Following the pointer is the obvious thing and it is wrong here: with the
-   * ends joined, position has no meaning — only the running order does — so a
-   * card carried between slots is drawn across whatever it passes, which reads
-   * as two blocks overlapping and is the one thing the timeline promises cannot
-   * happen. Left in its slot with the transition switched on, it glides into
-   * each new place as the drag crosses a midpoint, the block it displaced glides
-   * the other way, and the swap is visible while it happens without either card
-   * ever covering the other.
+   * It follows the pointer, and it has to: with the ends joined the block lands
+   * in a *slot*, and slots are as wide as the blocks that hold them, so a card
+   * pinned to its slot cannot also be under the hand moving it. Pinning it made
+   * a drag across two blocks feel like it had stopped — the card sat half a
+   * neighbour ahead of the pointer and waited for the next threshold.
    *
-   * With holes allowed the position *is* literal, so `start` already tracks the
-   * pointer exactly — and the transition comes off, because a continuous
-   * position should not lag behind the hand moving it.
+   * What made that look like an overlap was the lift being too timid to read as
+   * one. Raised and inset now, with the slot it will drop into outlined
+   * underneath, so the card is plainly above the row rather than in it.
+   *
+   * With holes allowed the position is literal and `start` already tracks the
+   * pointer, so there is nothing to hold separately.
    */
-  const gliding = dragging && timeline.mode === 'join'
-  const left = settledLeft
+  const [dragLeft, setDragLeft] = useState<number | null>(null)
+  const floating = dragging && dragLeft !== null && timeline.mode === 'join'
+  const left = floating ? dragLeft : settledLeft
+
+  /**
+   * A trim must not be animated.
+   *
+   * The width is the block's length, and the length is what the pointer is
+   * setting: a transition means the drawn edge lags behind the drag by its own
+   * duration. On a fast shrink the card is still wide while the filmstrip inside
+   * it has already been laid out for the narrow result, which leaves the black
+   * band that made the picture look like it had failed to load.
+   */
+  const [trimming, setTrimming] = useState(false)
 
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
 
@@ -158,7 +169,9 @@ export const BlockCard = memo(function BlockCard({
         snapCandidates(timeline, block.id),
         SNAP_PIXELS / pixelsPerSecond,
       )
-      moveBlock(block.id, Math.max(0, snapped))
+      const at = Math.max(0, snapped)
+      setDragLeft(timeToPixels(at, pixelsPerSecond))
+      moveBlock(block.id, at)
     },
     [block.id, moveBlock, pixelsPerSecond, timeline],
   )
@@ -189,6 +202,7 @@ export const BlockCard = memo(function BlockCard({
       // be cut while it was being carried.
       setSelection(null)
       beginGesture()
+      setDragLeft(settledLeft)
       onDragStateChange(block.id)
     },
     [beginGesture, block.id, settledLeft, onDragStateChange, selectBlock, setSelection],
@@ -220,16 +234,45 @@ export const BlockCard = memo(function BlockCard({
     return () => viewport.removeEventListener('scroll', onScroll)
   }, [dragging, placeAt])
 
+  const finishMove = useCallback(() => {
+    // Cleared with the drag flag, so the card goes from the pointer's position
+    // to its settled slot with the transition switched back on — the glide that
+    // shows where it landed.
+    setDragLeft(null)
+    onDragStateChange(null)
+    endDragScroll()
+  }, [onDragStateChange])
+
   const endMove = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId)
       }
-      onDragStateChange(null)
-      endDragScroll()
+      finishMove()
     },
-    [onDragStateChange],
+    [finishMove],
   )
+
+  /**
+   * The release, guaranteed.
+   *
+   * Pointer capture is supposed to deliver the release to the handle whatever it
+   * is over, and it does not always survive the card being transformed out from
+   * under the pointer mid-drag. Losing it leaves the block held: still lifted,
+   * still following, with no way to put it down. The window always hears the
+   * release, so this is what actually ends the gesture; the handler on the
+   * handle stays because it is the one that releases the capture.
+   */
+  useEffect(() => {
+    if (!dragging) return
+
+    window.addEventListener('pointerup', finishMove)
+    window.addEventListener('pointercancel', finishMove)
+    return () => {
+      window.removeEventListener('pointerup', finishMove)
+      window.removeEventListener('pointercancel', finishMove)
+    }
+  }, [dragging, finishMove])
 
   const startTrim = useCallback(
     (edge: 'start' | 'end') => (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -242,11 +285,13 @@ export const BlockCard = memo(function BlockCard({
       selectBlock(block.id)
       beginGesture()
       beginDragScroll()
+      setTrimming(true)
 
       const canvas = target.closest('[data-timeline-canvas]') as HTMLElement | null
       const viewport = canvas?.parentElement
       if (!canvas || !viewport) {
         endDragScroll()
+        setTrimming(false)
         return
       }
 
@@ -279,6 +324,7 @@ export const BlockCard = memo(function BlockCard({
         target.removeEventListener('pointercancel', onUp)
         viewport.removeEventListener('scroll', onScroll)
         endDragScroll()
+        setTrimming(false)
       }
 
       target.addEventListener('pointermove', onMove)
@@ -308,26 +354,43 @@ export const BlockCard = memo(function BlockCard({
   const tornStart = block.source.start > 1e-3
   const tornEnd = block.source.end < mediumDuration - 1e-3
 
-  const glide = 'left 220ms cubic-bezier(0.22,1,0.36,1)'
-  const settle = 'width 200ms cubic-bezier(0.22,1,0.36,1), transform 160ms cubic-bezier(0.22,1,0.36,1)'
+  const glide = 'left 200ms cubic-bezier(0.22,1,0.36,1), width 180ms cubic-bezier(0.22,1,0.36,1)'
+  const lift = 'transform 140ms cubic-bezier(0.22,1,0.36,1)'
 
   return (
     <>
+      {/*
+        The slot the block will drop into, outlined where it will land.
+
+        With the ends joined there can be no holes, so the space a carried block
+        leaves behind would otherwise read as one — the mode says it is
+        impossible and the timeline would appear to show it anyway. This says
+        "reserved", and it is the only thing on screen that tells you where the
+        drop goes while the card is under your hand.
+      */}
+      {floating && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 z-[5] rounded-[var(--radius-block)] border border-dashed border-paper/45 bg-paper/[0.06]"
+          style={{ left: settledLeft, width, height, transition: glide }}
+        />
+      )}
+
       <div
         ref={card}
         className={cx(
           'group absolute top-0 select-none',
-          dragging ? 'z-20' : selected ? 'z-[15]' : 'z-10',
+          dragging ? 'z-30' : selected ? 'z-[15]' : 'z-10',
         )}
         onContextMenu={openMenu}
         style={{
           left,
           width,
           height,
-          // Lifted a little while it is in hand. It never covers a neighbour, so
-          // this says "held" rather than excusing an overlap.
-          transform: dragging ? 'translateY(-4px)' : undefined,
-          transition: gliding ? `${glide}, ${settle}` : dragging ? settle : `${glide}, ${settle}`,
+          // Raised and inset far enough to read as held above the row rather
+          // than sitting in it: the block underneath shows along every edge.
+          transform: floating ? 'translateY(-11px) scale(0.93)' : undefined,
+          transition: dragging || trimming ? lift : `${glide}, ${lift}`,
         }}
       >
       <div
@@ -335,7 +398,7 @@ export const BlockCard = memo(function BlockCard({
           'relative h-full overflow-hidden rounded-[var(--radius-block)] border',
           'transition-[border-color,box-shadow] duration-150',
           dragging
-            ? 'border-snip shadow-[0_18px_40px_-18px_rgba(249,129,30,0.75)]'
+            ? 'border-snip shadow-[0_22px_48px_-14px_rgba(0,0,0,0.95),0_0_0_1px_rgba(249,129,30,0.55)]'
             : selected
               // Paper, not orange. Orange is the colour of cutting, and choosing
               // a block removes nothing — it says which piece the keyboard, the

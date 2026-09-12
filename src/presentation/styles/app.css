@@ -112,15 +112,28 @@
     background: transparent;
   }
 
+  /*
+   * Paper at a low opacity rather than a grey from the line palette.
+   *
+   * A scrollbar is a control you are meant to grab, and against this ground the
+   * line greys are nearly the ground: the thumb read as a seam in the panel.
+   * Borrowing the brightest colour in the palette at a fraction of its strength
+   * keeps it quiet while leaving it plainly visible.
+   */
   ::-webkit-scrollbar-thumb {
-    background: var(--color-line);
+    background: color-mix(in oklab, var(--color-paper) 26%, transparent);
     border-radius: 999px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-line-bright);
+    background: color-mix(in oklab, var(--color-paper) 44%, transparent);
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: color-mix(in oklab, var(--color-paper) 62%, transparent);
     background-clip: content-box;
   }
 }
@@ -281,7 +294,9 @@
   }
 
   .timeline-scroll::-webkit-scrollbar-thumb {
-    background: var(--color-line-bright);
+    /* Brighter still than the shared rule: on a long recording this is the main
+       way through the footage, and it sits against the darkest band on screen. */
+    background: color-mix(in oklab, var(--color-paper) 42%, transparent);
     border-radius: 999px;
     /* Two pixels rather than the shared rule's three: the bar is here to be
        grabbed, and the border is padding that the thumb does not get to use. */
@@ -290,12 +305,12 @@
   }
 
   .timeline-scroll::-webkit-scrollbar-thumb:hover {
-    background: var(--color-dusk-lift);
+    background: color-mix(in oklab, var(--color-paper) 64%, transparent);
     background-clip: content-box;
   }
 
   .timeline-scroll::-webkit-scrollbar-thumb:active {
-    background: var(--color-dusk-bright);
+    background: var(--color-paper);
     background-clip: content-box;
   }
 

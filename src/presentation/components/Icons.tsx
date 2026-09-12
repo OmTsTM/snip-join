@@ -301,3 +301,14 @@ export const Image = (props: IconProps) => (
     <path d="M4.5 16.5 9.5 12l4 3.5 3-2.5 3.5 3" />
   </Icon>
 )
+
+/** A view that follows a drag to the side of the window. */
+export const EdgeScroll = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M4.5 5.5v13" />
+    <path d="M19.5 5.5v13" />
+    <path d="M9 9.5 6.5 12 9 14.5" />
+    <path d="M15 9.5 17.5 12 15 14.5" />
+    <path d="M11 12h2" />
+  </Icon>
+)

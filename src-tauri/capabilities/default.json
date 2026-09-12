@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Least-privilege surface for the editor window: window chrome control, native file pickers, and opening an exported file in the OS file manager. No filesystem, shell or HTTP capability is granted to the renderer; every media operation goes through a typed Rust command.",
+  "description": "Least-privilege surface for the editor window: window chrome control, native file pickers, opening an exported file in the OS file manager, and the two outbound addresses the window offers. No filesystem, shell or HTTP capability is granted to the renderer; every media operation goes through a typed Rust command.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -17,7 +17,10 @@
     "opener:allow-reveal-item-in-dir",
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://ko-fi.com/omtstm" }]
+      "allow": [
+        { "url": "https://ko-fi.com/omtstm" },
+        { "url": "https://github.com/OmTsTM/snip-join" }
+      ]
     }
   ]
 }
