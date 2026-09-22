@@ -1,6 +1,6 @@
 [package]
 name = "snipjoin"
-version = "1.2.0"
+version = "1.2.1"
 description = "Snip a stretch out of any video, join what is left, and export it."
 authors = ["Snip Join"]
 edition = "2021"
