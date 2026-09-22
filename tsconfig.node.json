@@ -9,7 +9,15 @@
     "skipLibCheck": true,
     "composite": true,
     "emitDeclarationOnly": true,
-    "declarationDir": "./node_modules/.tmp/types"
+    "declarationDir": "./node_modules/.tmp/types",
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+
+    // The build config is the one file here that runs under Node rather than in
+    // the web view, so it is the one place Node's globals belong. Without this
+    // the whole project fails to resolve `node:fs`, `process` and
+    // `import.meta.url` — twelve errors the editor shows and `tsc --noEmit`
+    // never saw, because that only ever checked `src`.
+    "types": ["node"]
   },
   "include": ["vite.config.ts"]
 }

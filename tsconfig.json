@@ -14,6 +14,11 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    // `tsc --build` keeps a cache even for a project that emits nothing, and
+    // it defaults to dropping it beside this file. It belongs with the other
+    // build output instead, so a type check leaves the repository clean.
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
+
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -24,12 +29,25 @@
     "noImplicitReturns": true,
     "verbatimModuleSyntax": true,
 
-    "baseUrl": ".",
+    // Nothing is pulled out of `node_modules/@types` by name. The renderer has
+    // no filesystem, shell or HTTP capability at run time, and now that Node's
+    // types are installed for the build config, this is what stops them being
+    // ambient here too — `process` and `Buffer` should not type-check in a
+    // window that cannot call them. What this side does need is referenced
+    // explicitly, from `src/vite-env.d.ts`.
+    "types": [],
+
+    // No `baseUrl`. It is deprecated, TypeScript 7 removes it outright, and
+    // nothing here needed it: a `paths` entry without it resolves against this
+    // file's own folder, which is what these were relative to anyway. It was
+    // also quietly wrong — with the project root as the base, an import of
+    // `src/domain/timeline` type-checked perfectly well, and Vite, which knows
+    // only the four aliases below, could not resolve it at all.
     "paths": {
-      "@domain/*": ["src/domain/*"],
-      "@application/*": ["src/application/*"],
-      "@infrastructure/*": ["src/infrastructure/*"],
-      "@presentation/*": ["src/presentation/*"]
+      "@domain/*": ["./src/domain/*"],
+      "@application/*": ["./src/application/*"],
+      "@infrastructure/*": ["./src/infrastructure/*"],
+      "@presentation/*": ["./src/presentation/*"]
     }
   },
   "include": ["src"],
