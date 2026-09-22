@@ -87,7 +87,7 @@ vi.mock('@infrastructure/tauri/api', async (importOriginal) => {
   }
 })
 
-const { useEditor, selectCanExport, selectPreviewUrl } = await import('./editorStore')
+const { useEditor, selectCanExport, selectDirty, selectPreviewUrl } = await import('./editorStore')
 
 /** Previews that are not awaited still land in a microtask or two. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -203,5 +203,61 @@ describe('opening a project whose files have moved', () => {
     expect(repaired.history.present.blocks).toHaveLength(2)
     expect(selectCanExport(repaired)).toBe(true)
     expect(selectPreviewUrl(repaired)).toBe('asset://a.mp4.preview')
+  })
+})
+
+describe('what counts as unsaved work', () => {
+  beforeEach(async () => {
+    written.clear()
+    gone.clear()
+    await useEditor.getState().closeFile()
+  })
+
+  /**
+   * The save button wears a dot while there is something to write, and it wore
+   * one the moment a video finished opening — before a single cut had been
+   * made. A file nobody has touched is the file that is already on disk.
+   */
+  it('does not call a freshly opened video unsaved', async () => {
+    await openReady('a.mp4')
+
+    expect(useEditor.getState().phase).toBe('ready')
+    expect(selectDirty(useEditor.getState())).toBe(false)
+  })
+
+  it('calls it unsaved from the first edit, and clean again once written', async () => {
+    await openReady('a.mp4')
+    useEditor.getState().seek(20)
+    useEditor.getState().splitAtPlayhead()
+    expect(selectDirty(useEditor.getState())).toBe(true)
+
+    expect(await useEditor.getState().saveProject('edit.snipjoin')).toBe(true)
+    expect(selectDirty(useEditor.getState())).toBe(false)
+  })
+
+  /** A second file is a change to the project, whatever was done to it. */
+  it('calls adding a file unsaved', async () => {
+    await openReady('a.mp4')
+    expect(selectDirty(useEditor.getState())).toBe(false)
+
+    await addReady('b.mp4')
+    expect(selectDirty(useEditor.getState())).toBe(true)
+  })
+
+  it('does not call a reopened project unsaved either', async () => {
+    await openReady('a.mp4')
+    useEditor.getState().seek(20)
+    useEditor.getState().splitAtPlayhead()
+    await useEditor.getState().saveProject('edit.snipjoin')
+    await useEditor.getState().closeFile()
+
+    await useEditor.getState().openProject('edit.snipjoin')
+    await settle()
+
+    expect(selectDirty(useEditor.getState())).toBe(false)
+  })
+
+  it('has nothing to lose with nothing open', () => {
+    expect(selectDirty(useEditor.getState())).toBe(false)
   })
 })

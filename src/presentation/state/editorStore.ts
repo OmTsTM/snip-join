@@ -230,8 +230,14 @@ interface EditorState {
   projectPath: string | null
 
   /**
-   * What the last save wrote, so "has anything changed" can be answered without
-   * serialising the whole project on every render.
+   * The edit as it last stood on disk, so "has anything changed" can be
+   * answered without serialising the whole project on every render.
+   *
+   * Set by a save, and also by opening — a file that has just been read is the
+   * file that is on disk, and an untouched one has nothing to write. Leaving it
+   * null there is what made the save button claim unsaved work before anybody
+   * had made a cut, and what made closing an untouched video ask whether to
+   * keep it.
    *
    * The two references are compared, not their contents: the store replaces the
    * timeline and the media array wholesale on every edit, so identity says
@@ -580,11 +586,21 @@ export const useEditor = create<EditorState>((set, get) => ({
       const source = await api.openMedia(path)
       if (get().mediaToken !== token) return
 
+      // Held by name so the clean mark below can point at these very objects.
+      // `selectDirty` compares references, so a second array of the same one
+      // file would read as a change nobody made.
+      const media = [source]
+      const timeline = createTimeline(source.path, source.duration, 'join')
+
       set({
-        media: [source],
+        media,
         source,
         phase: 'preparing',
-        history: createHistory(createTimeline(source.path, source.duration, 'join')),
+        history: createHistory(timeline),
+        // The whole file, uncut, is exactly what is on disk already. Until
+        // something is done to it there is nothing to save, and saying
+        // otherwise puts a dot on the save button the moment a video opens.
+        savedMark: { timeline, media },
         selection: null,
         keyframes: {},
         keyframesTruncated: {},
@@ -1416,12 +1432,15 @@ export const selectSelectionCovers = (state: EditorState): boolean =>
   state.selection !== null && coveredSpan(state.history.present, state.selection) !== null
 
 /**
- * Whether anything has changed since the last save.
+ * Whether anything has changed since the edit last matched what is on disk.
+ *
+ * Which is either the last save or the moment the file was opened, since a
+ * video nobody has cut yet is already on disk in full.
  *
  * Identity, not contents: the store replaces the timeline and the media array
  * wholesale on every edit, so this says exactly as much as a deep comparison
- * would and costs nothing on a render. Never saved and nothing open is not
- * unsaved work — there is nothing to lose.
+ * would and costs nothing on a render. Nothing open is not unsaved work —
+ * there is nothing to lose.
  */
 export const selectDirty = (state: EditorState): boolean => {
   if (state.media.length === 0) return false
