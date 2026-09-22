@@ -43,3 +43,28 @@ export function sourceExtension(source: MediaSourceInfo): string {
   const match = /\.([a-z0-9]+)$/i.exec(source.fileName)
   return match?.[1]?.toLowerCase() ?? 'mp4'
 }
+
+/**
+ * Containers whose index lets a seek land on exactly the keyframe asked for.
+ * Mirrors `INDEXED_CONTAINERS` in `src-tauri/src/domain/media.rs`.
+ */
+const INDEXED_CONTAINERS = ['mp4', 'mov', 'm4v', '3gp', 'matroska', 'webm']
+
+/**
+ * Whether an export can copy this file's packets and re-encode only the frames
+ * beside each cut.
+ *
+ * The same rule as `MediaSource::supports_smart_cut` on the Rust side, kept in
+ * step by hand like the rest of the export vocabulary: the dialog has to know
+ * what the planner will do before the planner runs, or it promises a copy the
+ * backend then quietly turns into a re-encode.
+ */
+export function supportsSmartCut(source: MediaSourceInfo): boolean {
+  if (source.kind === 'still' || !source.video) return false
+  const codecOk = source.video.codec === 'h264' || source.video.codec === 'hevc'
+  const containerOk = source.container
+    .split(',')
+    .map((name) => name.trim())
+    .some((name) => INDEXED_CONTAINERS.includes(name))
+  return codecOk && containerOk
+}

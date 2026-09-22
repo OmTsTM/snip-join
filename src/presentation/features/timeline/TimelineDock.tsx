@@ -2,8 +2,19 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 
 import { formatDuration, span } from '@domain/time'
 import { blockAt, gaps as timelineGaps } from '@domain/timeline'
-import { EdgeScroll, Fit, Magnet, Redo, Split, Undo, ZoomIn, ZoomOut } from '@presentation/components/Icons'
-import { IconButton } from '@presentation/components/primitives'
+import {
+  EdgeScroll,
+  Fit,
+  Magnet,
+  MarkEnd,
+  MarkStart,
+  Redo,
+  Split,
+  Undo,
+  ZoomIn,
+  ZoomOut,
+} from '@presentation/components/Icons'
+import { Button, IconButton } from '@presentation/components/primitives'
 import { selectDragging, useMediaDrag } from '@presentation/features/inspector/mediaDrag'
 import { useT } from '@presentation/i18n/I18nProvider'
 import {
@@ -12,6 +23,7 @@ import {
   selectDuration,
   selectHasCutPoints,
   selectKept,
+  selectLocked,
   selectTimeline,
   useEditor,
 } from '@presentation/state/editorStore'
@@ -69,13 +81,18 @@ export function TimelineDock() {
   const selectBlock = useEditor((state) => state.selectBlock)
   const selectedBlock = useEditor((state) => state.selectedBlock)
   const hasCutPoints = useEditor(selectHasCutPoints)
-  const phase = useEditor((state) => state.phase)
-  const pendingFrames = useEditor((state) => state.pendingFrames)
-  // Covered from the moment a file is being prepared until the last frame has
+  // Covered from the moment a file is being opened until its last frame has
   // landed, which is the whole stretch where the strip is visibly changing.
-  // Covered while a file is being opened or prepared, and while frames are
-  // still arriving. Not on a blank project: there is nothing on its way.
-  const stripLoading = phase === 'opening' || phase === 'preparing' || pendingFrames > 0
+  // Not on a blank project: there is nothing on its way.
+  //
+  // The same flag disables every edit, which is the point — the veil is the
+  // reason the track will not take a cut, so it has to be the same answer in
+  // both places rather than two conditions that can drift apart.
+  const locked = useEditor(selectLocked)
+  // Only to tell the two waits apart in the veil's own wording.
+  const phase = useEditor((state) => state.phase)
+  const markIn = useEditor((state) => state.markIn)
+  const markOut = useEditor((state) => state.markOut)
   const snapToCutPoints = useEditor((state) => state.snapToCutPoints)
   const setSnapToCutPoints = useEditor((state) => state.setSnapToCutPoints)
   const edgeScroll = useEditor((state) => state.edgeScroll)
@@ -289,6 +306,9 @@ export function TimelineDock() {
   const startTrackGesture = useCallback(
     (mode: 'scrub' | 'select') => (event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return
+      // Scrubbing is looking; marking is the start of an edit, and the track
+      // is not open for one until the project has been read.
+      if (mode === 'select' && selectLocked(useEditor.getState())) return
 
       const canvas = event.currentTarget.closest('[data-timeline-canvas]') as HTMLElement | null
       const viewport = canvas?.parentElement
@@ -386,16 +406,45 @@ export function TimelineDock() {
         className="flex shrink-0 items-center gap-1 px-3"
         style={{ height: TOOLBAR_HEIGHT }}
       >
-        <IconButton label={t('history.undo')} onClick={undo} disabled={!canUndo}>
+        <IconButton label={t('history.undo')} onClick={undo} disabled={!canUndo || locked}>
           <Undo size={15} />
         </IconButton>
-        <IconButton label={t('history.redo')} onClick={redo} disabled={!canRedo}>
+        <IconButton label={t('history.redo')} onClick={redo} disabled={!canRedo || locked}>
           <Redo size={15} />
         </IconButton>
 
         <span className="mx-1.5 h-4 w-px bg-line" />
 
-        <IconButton label={t('blocks.split')} onClick={splitAtPlayhead}>
+        {/* The two marks sit here, beside the playhead they act on, rather
+            than in the column to the right: "start here" is something said
+            while looking at the track, and the column was a long way to go
+            to say it. */}
+        <Button
+          size="sm"
+          tone="quiet"
+          icon={<MarkStart size={14} />}
+          title={t('hint.markIn')}
+          onClick={markIn}
+          disabled={locked}
+          className="px-2"
+        >
+          {t('selection.setIn')}
+        </Button>
+        <Button
+          size="sm"
+          tone="quiet"
+          icon={<MarkEnd size={14} />}
+          title={t('hint.markOut')}
+          onClick={markOut}
+          disabled={locked}
+          className="px-2"
+        >
+          {t('selection.setOut')}
+        </Button>
+
+        <span className="mx-1.5 h-4 w-px bg-line" />
+
+        <IconButton label={t('blocks.split')} onClick={splitAtPlayhead} disabled={locked}>
           <Split size={15} />
         </IconButton>
 
@@ -459,7 +508,7 @@ export function TimelineDock() {
         the canvas is as wide as its own padding, and a message inside it wrapped
         into a thirty-pixel column.
       */}
-      {empty && !stripLoading && (
+      {empty && !locked && (
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-center px-6"
           style={{ top: TOOLBAR_HEIGHT }}
@@ -534,7 +583,7 @@ export function TimelineDock() {
               />
             ))}
 
-            <StripLoading visible={stripLoading} />
+            <StripLoading visible={locked} phase={phase} />
           </div>
 
           <CutPoints

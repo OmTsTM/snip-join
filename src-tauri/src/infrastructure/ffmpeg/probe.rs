@@ -170,6 +170,7 @@ fn to_video_stream(stream: &ProbeStream) -> VideoStream {
         color_primaries: stream.color_primaries.clone(),
         color_transfer: stream.color_transfer.clone(),
         color_space: stream.color_space.clone(),
+        profile: stream.profile.clone(),
     }
 }
 
@@ -247,6 +248,7 @@ struct ProbeStream {
     color_transfer: Option<String>,
     #[serde(rename = "color_space")]
     color_space: Option<String>,
+    profile: Option<String>,
     #[serde(default)]
     disposition: Disposition,
     #[serde(default)]

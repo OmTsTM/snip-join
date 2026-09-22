@@ -96,6 +96,7 @@ mod tests {
                 color_primaries: None,
                 color_transfer: None,
                 color_space: None,
+                profile: None,
             }),
             audio: None,
             playability,

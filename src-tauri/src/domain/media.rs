@@ -22,6 +22,10 @@ pub struct VideoStream {
     pub color_primaries: Option<String>,
     pub color_transfer: Option<String>,
     pub color_space: Option<String>,
+    /// The codec profile as the prober names it (`High`, `Main 10`), so a piece
+    /// re-encoded to sit beside copied packets can be asked for the same one.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 impl VideoStream {
@@ -128,7 +132,35 @@ impl MediaSource {
     pub fn is_still(&self) -> bool {
         self.kind == MediaKind::Still
     }
+
+    /// Whether an export can copy this file's packets and re-encode only the
+    /// frames beside each cut.
+    ///
+    /// Two codecs, because the pieces are joined as an MPEG transport stream
+    /// with the parameter sets carried in-band before every keyframe, which is
+    /// what lets a re-encoded stretch sit beside copied packets it shares no
+    /// header with. And only from a container with an index, so a seek lands on
+    /// the keyframe it was asked for rather than somewhere near it.
+    pub fn supports_smart_cut(&self) -> bool {
+        if self.is_still() {
+            return false;
+        }
+        let Some(video) = self.video.as_ref() else {
+            return false;
+        };
+        let codec_ok = matches!(video.codec.as_str(), "h264" | "hevc");
+        let container_ok =
+            self.container.split(',').map(str::trim).any(|name| INDEXED_CONTAINERS.contains(&name));
+        codec_ok && container_ok
+    }
 }
+
+/// Containers whose index lets a seek land on exactly the keyframe asked for.
+///
+/// A transport stream has no index: FFmpeg guesses a byte offset from the bit
+/// rate and reads forward, which can overshoot the keyframe wanted and start a
+/// copy one group of pictures late.
+const INDEXED_CONTAINERS: &[&str] = &["mp4", "mov", "m4v", "3gp", "matroska", "webm"];
 
 /// Containers the embedded Chromium media stack can demux.
 const WEB_CONTAINERS: &[&str] = &["mp4", "mov", "m4v", "webm", "ogg", "matroska"];
@@ -206,6 +238,7 @@ mod tests {
             color_primaries: None,
             color_transfer: None,
             color_space: None,
+            profile: None,
         }
     }
 

@@ -90,10 +90,28 @@ const { useEditor, selectCanExport } = await import('./editorStore')
  */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
+/**
+ * Opens a file and waits until the timeline will accept an edit.
+ *
+ * Cutting is refused while the frames are still arriving, so a test that
+ * edits the moment `openFile` resolves is testing the lock rather than the
+ * edit it meant to. The wait is what a user does by watching the strip fill.
+ */
+async function openReady(path: string): Promise<void> {
+  await useEditor.getState().openFile(path)
+  await settle()
+}
+
+/** The same, for a file added to a project that is already open. */
+async function addReady(path: string, at?: number): Promise<void> {
+  await useEditor.getState().addMedia(path, at)
+  await settle()
+}
+
 describe('the clipboard', () => {
   beforeEach(async () => {
     await useEditor.getState().closeFile()
-    await useEditor.getState().openFile('a.mp4')
+    await openReady('a.mp4')
   })
 
   it('pastes what was copied at the playhead, splitting what was there', () => {
@@ -147,7 +165,7 @@ describe('the clipboard', () => {
   })
 
   it('drops a piece whose file has left the project', async () => {
-    await useEditor.getState().addMedia('b.mp4')
+    await addReady('b.mp4')
     const fromB = useEditor.getState().history.present.blocks.find((b) => b.mediaId === 'b.mp4')!
     useEditor.getState().copyBlock(fromB.id)
 
@@ -163,7 +181,7 @@ describe('the clipboard', () => {
 describe('removing what the rails cover', () => {
   beforeEach(async () => {
     await useEditor.getState().closeFile()
-    await useEditor.getState().openFile('a.mp4')
+    await openReady('a.mp4')
     useEditor.getState().setMode('gap')
     useEditor.getState().setSelection(span(20, 30))
     useEditor.getState().removeSelection()
@@ -204,7 +222,7 @@ describe('removing what the rails cover', () => {
 describe('snapping to the cut points of the right file', () => {
   beforeEach(async () => {
     await useEditor.getState().closeFile()
-    await useEditor.getState().openFile('a.mp4')
+    await openReady('a.mp4')
     // The store is a module singleton, so the setting outlives the file: stated
     // rather than assumed, or these read whatever the last test left behind.
     useEditor.getState().setSnapToCutPoints(true)
@@ -225,7 +243,7 @@ describe('snapping to the cut points of the right file', () => {
    * it, so a selection could not be marked on a second file at all.
    */
   it('snaps a position on the second file to that file, not the first', async () => {
-    await useEditor.getState().addMedia('b.mp4')
+    await addReady('b.mp4')
     await settle()
 
     // 65.9 seconds along the timeline is 5.9 into `b.mp4`, whose nearest cut
@@ -284,7 +302,7 @@ describe('snapping to the cut points of the right file', () => {
 describe('the chosen block', () => {
   beforeEach(async () => {
     await useEditor.getState().closeFile()
-    await useEditor.getState().openFile('a.mp4')
+    await openReady('a.mp4')
     useEditor.getState().seek(20)
     useEditor.getState().splitAtPlayhead()
   })
@@ -305,5 +323,55 @@ describe('the chosen block', () => {
     useEditor.getState().deleteBlock(second.id)
 
     expect(useEditor.getState().selectedBlock).toBeNull()
+  })
+})
+
+describe('while the file behind the timeline is still being read', () => {
+  /** Tries every gesture that would record an edit. */
+  const attemptEverything = () => {
+    const store = useEditor.getState()
+    store.seek(20)
+    store.splitAtPlayhead()
+    store.setSelection(span(5, 10))
+    store.removeSelection()
+    store.liftSelection()
+    store.setMode('gap')
+    store.pasteAtPlayhead()
+  }
+
+  beforeEach(async () => {
+    await useEditor.getState().closeFile()
+    await openReady('a.mp4')
+  })
+
+  it('refuses every edit while the project is being prepared', () => {
+    const before = useEditor.getState().history.present
+
+    // The blocks are on screen before the media behind them have been read.
+    useEditor.setState({ phase: 'preparing' })
+    attemptEverything()
+    expect(useEditor.getState().history.present).toBe(before)
+
+    useEditor.setState({ phase: 'ready' })
+    useEditor.getState().splitAtPlayhead()
+    expect(useEditor.getState().history.present.blocks).toHaveLength(2)
+  })
+
+  /**
+   * The gap the lock missed at first: the preview is ready long before the
+   * filmstrip is, and for those seconds the track looked busy and still took
+   * a cut.
+   */
+  it('refuses every edit while the frames are still arriving', () => {
+    const before = useEditor.getState().history.present
+    expect(useEditor.getState().phase).toBe('ready')
+
+    useEditor.setState({ pendingFrames: 1 })
+    attemptEverything()
+    expect(useEditor.getState().history.present).toBe(before)
+
+    useEditor.setState({ pendingFrames: 0 })
+    useEditor.getState().splitAtPlayhead()
+    expect(useEditor.getState().history.present.blocks).toHaveLength(2)
   })
 })

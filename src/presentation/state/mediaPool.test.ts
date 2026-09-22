@@ -99,6 +99,27 @@ vi.mock('@infrastructure/tauri/api', async (importOriginal) => {
 
 const { useEditor } = await import('./editorStore')
 
+/** Frames and previews land in a task or two that the store does not await. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+/**
+ * Opens a file and waits until the timeline will accept an edit.
+ *
+ * Cutting is refused while the frames are still arriving, so a test that
+ * edits the moment `openFile` resolves is testing the lock rather than the
+ * edit it meant to. The wait is what a user does by watching the strip fill.
+ */
+async function openReady(path: string): Promise<void> {
+  await useEditor.getState().openFile(path)
+  await settle()
+}
+
+/** The same, for a file added to a project that is already open. */
+async function addReady(path: string, at?: number): Promise<void> {
+  await useEditor.getState().addMedia(path, at)
+  await settle()
+}
+
 describe('a timeline that draws on several files', () => {
   beforeEach(async () => {
     opened.length = 0
@@ -110,7 +131,7 @@ describe('a timeline that draws on several files', () => {
   })
 
   it('opens the first file as the whole timeline', async () => {
-    await useEditor.getState().openFile('a.mp4')
+    await openReady('a.mp4')
     const state = useEditor.getState()
 
     expect(state.media.map((m) => m.path)).toEqual(['a.mp4'])
@@ -119,8 +140,8 @@ describe('a timeline that draws on several files', () => {
   })
 
   it('puts a second file after everything already there', async () => {
-    await useEditor.getState().openFile('a.mp4')
-    await useEditor.getState().addMedia('b.mp4')
+    await openReady('a.mp4')
+    await addReady('b.mp4')
 
     const { media, history } = useEditor.getState()
     expect(media.map((m) => m.path)).toEqual(['a.mp4', 'b.mp4'])
@@ -130,8 +151,8 @@ describe('a timeline that draws on several files', () => {
   })
 
   it('reads the preview and the frames of each file under its own key', async () => {
-    await useEditor.getState().openFile('a.mp4')
-    await useEditor.getState().addMedia('b.mp4')
+    await openReady('a.mp4')
+    await addReady('b.mp4')
 
     expect(previewed).toEqual(['a.mp4', 'b.mp4'])
     expect(framed).toEqual(['a.mp4', 'b.mp4'])
@@ -143,8 +164,8 @@ describe('a timeline that draws on several files', () => {
    * want, and it must not read the file twice or list it twice.
    */
   it('gives the same file a second block without a second entry', async () => {
-    await useEditor.getState().openFile('a.mp4')
-    await useEditor.getState().addMedia('a.mp4')
+    await openReady('a.mp4')
+    await addReady('a.mp4')
 
     const { media, history } = useEditor.getState()
     expect(media).toHaveLength(1)
@@ -153,9 +174,9 @@ describe('a timeline that draws on several files', () => {
   })
 
   it('names every file once in the export, with the clips indexing it', async () => {
-    await useEditor.getState().openFile('a.mp4')
-    await useEditor.getState().addMedia('b.mp4')
-    await useEditor.getState().addMedia('a.mp4')
+    await openReady('a.mp4')
+    await addReady('b.mp4')
+    await addReady('a.mp4')
 
     // The spec is not what this test is about; the default one will do.
     await useEditor.getState().runExport(fastSpec(), 'out.mp4')
@@ -169,8 +190,8 @@ describe('a timeline that draws on several files', () => {
   })
 
   it('drops every block of a file that is removed', async () => {
-    await useEditor.getState().openFile('a.mp4')
-    await useEditor.getState().addMedia('b.mp4')
+    await openReady('a.mp4')
+    await addReady('b.mp4')
     await useEditor.getState().removeMedium('b.mp4')
 
     const { media, history } = useEditor.getState()
@@ -184,8 +205,8 @@ describe('a timeline that draws on several files', () => {
    * Losing it halfway through an edit would silently change the result.
    */
   it('refuses to remove the first file', async () => {
-    await useEditor.getState().openFile('a.mp4')
-    await useEditor.getState().addMedia('b.mp4')
+    await openReady('a.mp4')
+    await addReady('b.mp4')
     await useEditor.getState().removeMedium('a.mp4')
 
     expect(useEditor.getState().media.map((m) => m.path)).toEqual(['a.mp4', 'b.mp4'])

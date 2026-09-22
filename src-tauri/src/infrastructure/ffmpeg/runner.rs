@@ -91,6 +91,10 @@ pub async fn run_capturing_bytes(program: &Path, args: &[String]) -> AppResult<V
 
 /// Runs FFmpeg to completion, reporting progress and honouring cancellation.
 ///
+/// Answers with the last progress FFmpeg reported, which is how a caller can
+/// tell a run that wrote nothing from one that wrote what was asked: FFmpeg
+/// exits with zero either way.
+///
 /// `on_progress` is called from the reader task, so it must be cheap and must not
 /// block; emitting a Tauri event is fine, doing file IO is not.
 pub async fn run_with_progress<F>(
@@ -98,7 +102,7 @@ pub async fn run_with_progress<F>(
     args: &[String],
     mut cancel: watch::Receiver<bool>,
     mut on_progress: F,
-) -> AppResult<()>
+) -> AppResult<Progress>
 where
     F: FnMut(Progress) + Send + 'static,
 {
@@ -131,6 +135,7 @@ where
                 }
             }
         }
+        pending
     });
 
     // Diagnostics are read concurrently; leaving stderr unread would deadlock
@@ -161,14 +166,14 @@ where
         }
     };
 
-    let _ = progress_task.await;
+    let last = progress_task.await.unwrap_or_default();
     let diagnostics = stderr_task.await.unwrap_or_default();
 
     if !status.success() {
         return Err(AppError::EncodeFailed(tail(&diagnostics, 12)));
     }
 
-    Ok(())
+    Ok(last)
 }
 
 /// Resolves when the cancellation flag is set.

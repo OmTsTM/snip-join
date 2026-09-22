@@ -240,7 +240,7 @@ fn gap_video_chain(duration: f64, options: &GraphOptions) -> String {
 ///
 /// `anullsrc` is infinite, so it is trimmed to the gap length; without the trim
 /// the concatenation would never reach the following segment.
-fn gap_audio_chain(duration: f64, options: &GraphOptions) -> String {
+pub(crate) fn gap_audio_chain(duration: f64, options: &GraphOptions) -> String {
     format!(
         "anullsrc=sample_rate={}:channel_layout={},atrim=duration={duration:.6},asetpts=PTS-STARTPTS,{}",
         options.sample_rate,
@@ -249,7 +249,7 @@ fn gap_audio_chain(duration: f64, options: &GraphOptions) -> String {
     )
 }
 
-fn audio_format(options: &GraphOptions) -> String {
+pub(crate) fn audio_format(options: &GraphOptions) -> String {
     format!(
         "aformat=sample_fmts=fltp:sample_rates={}:channel_layouts={}",
         options.sample_rate,
@@ -625,6 +625,7 @@ mod tests {
                 color_primaries: None,
                 color_transfer: None,
                 color_space: None,
+                profile: None,
             }),
             audio: None,
             playability: Playability::NeedsProxy,

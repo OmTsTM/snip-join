@@ -35,12 +35,15 @@ export function TitleBar({
   onShowShortcuts,
   onBeforeReplace,
   onNewProject,
+  onOpenProject,
 }: {
   readonly onShowShortcuts: () => void
   /** Asks about unsaved work; answers whether the application may be replaced. */
   readonly onBeforeReplace: () => Promise<boolean>
   /** Puts the current project down, asking about unsaved work first. */
   readonly onNewProject: () => void
+  /** Opens a saved project in place of this one, asking about it first. */
+  readonly onOpenProject: () => void
 }) {
   const { t, locale, setLocale } = useI18n()
   const skin = useSkin((state) => state.skin)
@@ -126,7 +129,7 @@ export function TitleBar({
       */}
       <div className="flex shrink-0 items-center gap-0.5 pr-1">
         {editing && <NewProject onStart={onNewProject} />}
-        <OpenProject />
+        <OpenProject onOpen={onOpenProject} />
 
         <UpdateButton onBeforeReplace={onBeforeReplace} />
 

@@ -3,7 +3,6 @@ import { useCallback } from 'react'
 
 import { NewProject as NewProjectIcon, Project } from '@presentation/components/Icons'
 import { CHROME_CONTROL, CHROME_ICON } from '@presentation/features/chrome/controls'
-import { useProjectActions } from '@presentation/features/project/useProject'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { useEditor } from '@presentation/state/editorStore'
 
@@ -91,15 +90,19 @@ export function NewProject({ onStart }: { readonly onStart: () => void }) {
  * Beside the one that brings in a file, because they are the same decision from
  * the user's side — "start from this" — and the only difference is whether the
  * thing being started from is a video or an edit that already exists.
+ *
+ * The picker is opened by the caller, for the same reason the new-project
+ * button hands its work upwards: opening a project replaces the edit in this
+ * window, and the question about losing an unsaved one belongs where the
+ * dialog does.
  */
-export function OpenProject() {
+export function OpenProject({ onOpen }: { readonly onOpen: () => void }) {
   const t = useT()
-  const { openExisting } = useProjectActions()
 
   return (
     <button
       type="button"
-      onClick={() => void openExisting()}
+      onClick={onOpen}
       title={t('project.open')}
       aria-label={t('project.open')}
       className={CHROME_CONTROL}

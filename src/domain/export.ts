@@ -79,13 +79,16 @@ export function canCopyStreams(
   hasGaps: boolean,
   spansMedia: boolean,
   usesStill = false,
+  smartCut = false,
 ): boolean {
   // Two files cannot be copied into one stream however alike their encodings
   // look, which puts a second file in the same category as a hole. A still is a
   // third: it is one packet that has to be looped into a stretch of video, and
-  // a copy would make a five second title card last a single frame.
+  // a copy would make a five second title card last a single frame. A hole is
+  // only in that category for a file whose packets cannot be joined with drawn
+  // ones; where they can, the hole is drawn and the footage around it copied.
   return (
-    !hasGaps &&
+    (!hasGaps || smartCut) &&
     !spansMedia &&
     !usesStill &&
     spec.upscale === 'none' &&
@@ -126,8 +129,19 @@ export function resolveScale(
  * re-encode, longer for an upscale. It is presented as an approximation in the
  * interface for exactly that reason.
  */
-export function estimateSeconds(spec: ExportSpec, outputDuration: number, pixelRatio: number): number {
-  if (spec.mode === 'fast') return Math.max(1, outputDuration * 0.02)
+export function estimateSeconds(
+  spec: ExportSpec,
+  outputDuration: number,
+  pixelRatio: number,
+  reEncoded = 0,
+): number {
+  if (spec.mode === 'fast') {
+    // The copied part moves at disk speed; the frames beside each cut cost
+    // what a re-encode does, and joining them means encoding the sound once.
+    const copied = Math.max(0, outputDuration - reEncoded)
+    const sound = reEncoded > 0 ? outputDuration * 0.01 : 0
+    return Math.max(1, copied * 0.02 + reEncoded * 0.12 + sound)
+  }
 
   const base = outputDuration * 0.12
   const scaleCost = spec.upscale === 'none' ? 1 : Math.max(1, pixelRatio) * upscaleCost(spec.upscale)

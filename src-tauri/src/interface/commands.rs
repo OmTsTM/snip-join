@@ -223,8 +223,12 @@ pub async fn keyframe_positions(
         return Ok(KeyframeReport { positions: vec![], truncated: true });
     }
 
-    let found = keyframes::probe(std::path::Path::new(&source.path)).await?;
-    Ok(KeyframeReport { positions: found.positions, truncated: found.truncated })
+    let found = keyframes::probe(Path::new(&source.path)).await?;
+    let report = KeyframeReport { positions: found.positions(), truncated: found.truncated };
+    // Kept for the export: a copy that re-encodes only the frames beside each
+    // cut needs the packet counts this list was read with.
+    state.remember_keyframes(&source.path, found);
+    Ok(report)
 }
 
 /// Suggests a destination beside the source file.
@@ -276,6 +280,24 @@ pub async fn export_timeline(
     let output = paths::validate_output(&request.output_path, &sources)?;
     let capabilities = capabilities::capabilities().await?;
 
+    // The keyframe index of every file the timeline reads, where one can be
+    // used. Read now if the timeline never asked for it, as happens when a
+    // project is reopened and exported at once, because without it a copy
+    // cannot be exact.
+    let mut cut_points = Vec::with_capacity(media.len());
+    for source in &media {
+        let index = match state.keyframes(&source.path) {
+            Some(index) => Some(index),
+            None if source.supports_smart_cut() => {
+                let index = keyframes::probe(Path::new(&source.path)).await?;
+                state.remember_keyframes(&source.path, index.clone());
+                Some(index)
+            }
+            None => None,
+        };
+        cut_points.push(index);
+    }
+
     let plan = export_plan::plan(
         &media,
         &edit,
@@ -284,6 +306,7 @@ pub async fn export_timeline(
         &output,
         &paths::scratch_root(),
         &request.job_id,
+        &cut_points,
     )?;
 
     let cancel = state.register_job(&request.job_id);

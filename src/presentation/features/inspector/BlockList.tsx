@@ -1,12 +1,14 @@
 import { AnimatePresence, Reorder, useDragControls } from 'motion/react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 import { duration as spanDuration, formatTimecode } from '@domain/time'
 import { blockEnd, type Block, type BlockId } from '@domain/timeline'
 import { Grip, Trash } from '@presentation/components/Icons'
 import { cx } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
-import { selectTimeline, useEditor } from '@presentation/state/editorStore'
+import { selectLocked, selectTimeline, useEditor } from '@presentation/state/editorStore'
+
+import { InspectorPanel } from './InspectorPanel'
 
 /**
  * The running order, as a list.
@@ -34,6 +36,7 @@ export function BlockList() {
   const reorderBlock = useEditor((state) => state.reorderBlock)
   const selectedBlock = useEditor((state) => state.selectedBlock)
   const playhead = useEditor((state) => state.playhead)
+  const locked = useEditor(selectLocked)
 
   const count = timeline.blocks.length
 
@@ -58,56 +61,11 @@ export function BlockList() {
 
   const order = useMemo(() => rows.map((block) => block.id), [rows])
 
-  /**
-   * Brings the whole panel into view, with the chosen row inside it.
-   *
-   * The list is the only place each piece's source range is written down, and on
-   * an ordinary window it is below the fold — so choosing a block on the
-   * timeline told you nothing unless you went looking. Scrolling the row just
-   * far enough was not enough either: it arrived alone at the bottom edge with
-   * its heading and its neighbours still out of sight, which is not "showing you
-   * the blocks". The panel is framed instead, and the row nudged into view
-   * within it only if the panel is too tall to fit.
-   */
-  const panel = useRef<HTMLElement>(null)
-  useEffect(() => {
-    if (!selectedBlock) return
-
-    // Found in the document rather than through a ref: the rows are motion
-    // components, and a ref handed to one does not reliably reach the node it
-    // renders.
-    const row = document.querySelector<HTMLElement>(`[data-block-row="${selectedBlock}"]`)
-    const section = panel.current
-    if (!row || !section) return
-
-    // The column, found by hand: `scrollIntoView` walks out to the row's own
-    // list, which usually does not overflow, and stops there having moved
-    // nothing at all.
-    let scroller = section.parentElement
-    while (scroller && scroller.scrollHeight <= scroller.clientHeight) {
-      scroller = scroller.parentElement
-    }
-    if (!scroller) return
-
-    const box = scroller.getBoundingClientRect()
-    const sectionBox = section.getBoundingClientRect()
-
-    // A gap above, so the panel arrives with its heading clear of the edge
-    // rather than flush against it.
-    const gap = 12
-    if (sectionBox.top < box.top + gap || sectionBox.bottom > box.bottom) {
-      scroller.scrollTop += Math.min(
-        sectionBox.top - box.top - gap,
-        Math.max(0, sectionBox.bottom - box.bottom + gap),
-      )
-    }
-
-    // Only now, and only if the panel could not fit whole.
-    const rowBox = row.getBoundingClientRect()
-    const after = scroller.getBoundingClientRect()
-    if (rowBox.top < after.top) scroller.scrollTop += rowBox.top - after.top - gap
-    else if (rowBox.bottom > after.bottom) scroller.scrollTop += rowBox.bottom - after.bottom + gap
-  }, [selectedBlock])
+  // Nothing here scrolls the column. Choosing a block used to pull this panel
+  // into view, on the reasoning that the list is the only place a piece's
+  // source range is written down — but choosing a block is something you do
+  // while looking at the *timeline*, and the column jumping underneath every
+  // click was a second thing moving for a decision that was already made.
 
   const drop = (id: BlockId) => {
     const settled = carried
@@ -118,14 +76,15 @@ export function BlockList() {
   }
 
   return (
-    <section ref={panel} className="panel flex shrink-0 flex-col">
-      <header className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4">
-        <h2 className="eyebrow">{t('blocks.title')}</h2>
-        <span className="text-[11px] text-faint">
+    <InspectorPanel
+      id="blocks"
+      title={t('blocks.title')}
+      aside={
+        <span className="shrink-0 px-1 text-[11px] text-faint">
           {count === 1 ? t('blocks.one') : t('blocks.many', { count })}
         </span>
-      </header>
-
+      }
+    >
       <Reorder.Group
         as="ol"
         axis="y"
@@ -148,11 +107,12 @@ export function BlockList() {
               }}
               onDelete={() => deleteBlock(block.id)}
               onDrop={() => drop(block.id)}
+              locked={locked}
             />
           ))}
         </AnimatePresence>
       </Reorder.Group>
-    </section>
+    </InspectorPanel>
   )
 }
 
@@ -178,6 +138,7 @@ function BlockRow({
   onChoose,
   onDelete,
   onDrop,
+  locked,
 }: {
   readonly block: Block
   readonly index: number
@@ -187,6 +148,8 @@ function BlockRow({
   readonly onChoose: () => void
   readonly onDelete: () => void
   readonly onDrop: () => void
+  /** While the project is still being prepared nothing here may reorder. */
+  readonly locked: boolean
 }) {
   const t = useT()
   const controls = useDragControls()
@@ -228,6 +191,7 @@ function BlockRow({
           // Everything but the button that removes the row: a drag that began
           // on it would make deleting a block feel like a gamble.
           if ((event.target as HTMLElement).closest('[data-no-drag]')) return
+          if (locked) return
           controls.start(event)
         }}
         className={cx(
@@ -282,7 +246,7 @@ function BlockRow({
           type="button"
           data-no-drag
           onClick={onDelete}
-          disabled={count <= 1}
+          disabled={count <= 1 || locked}
           title={t('blocks.delete')}
           aria-label={t('blocks.delete')}
           className="shrink-0 rounded-md p-1.5 text-faint opacity-0 transition-[opacity,color] duration-150 hover:text-snip-ink focus-visible:opacity-100 group-hover:opacity-100 disabled:pointer-events-none"

@@ -220,6 +220,13 @@ export const api = {
   mediaExists: (path: string) => call<boolean>('media_exists', { path }),
 
   /**
+   * The same question about a project file. One command answers both: what is
+   * asked is whether there is a non-empty file at the path, and the backend
+   * has no reason to care what kind.
+   */
+  fileExists: (path: string) => call<boolean>('media_exists', { path }),
+
+  /**
    * Asks GitHub whether a newer Snip Join has been published.
    *
    * The renderer has no HTTP capability, which is the point: the request is made

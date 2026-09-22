@@ -29,6 +29,7 @@ for it and nobody else.
 | Shell | Tauri 2 | ~10 MB binary, system WebView2, capability-based security |
 | Backend | Rust 2021, Tokio | Memory safety and RAII cleanup for child processes |
 | Renderer | React 19 + TypeScript | Strict mode, no `any`, `exactOptionalPropertyTypes` |
+| Types | Two projects | `src` is browser-only (`types: []`); `vite.config.ts` is the one place Node's types live |
 | Styling | Tailwind CSS 4 | CSS-first `@theme`, tokens sampled from the logo |
 | State | Zustand | One store, narrow selectors so 60 Hz playhead updates stay cheap |
 | Motion | Motion (Framer) | Springs on layout, honours `prefers-reduced-motion` |
@@ -193,6 +194,110 @@ All-intra footage (ProRes, DNxHD, MJPEG) makes every frame a cut point. The list
 is capped at 20 000 and the `truncated` flag says "cut anywhere" instead of
 plotting a grey wash.
 
+## Exact cuts without re-encoding everything
+
+A cut placed *between* keyframes no longer moves. `export_plan.rs` breaks each
+clip into pieces: the frames from the cut to the first keyframe inside the clip
+are re-encoded, the whole groups of pictures between the first and last keyframe
+are copied packet for packet, and the frames after the last keyframe are
+re-encoded again. A hole is drawn as one more piece. The pieces are joined with
+one freshly encoded sound track. A snapped edit has no re-encoded pieces, and
+then the plain copy runs with the sound copied too. The rules that make this
+work, each of which was found by breaking it:
+
+- **Pieces go through MPEG-TS, never the destination container.** A copied
+  stretch and a re-encoded one share no SPS/PPS, and MP4 keeps one header per
+  track: the second piece decodes with the first piece's header and comes out
+  as blocks. A transport stream carries the parameter sets in-band before every
+  keyframe, and the final remux to MP4 keeps them there. Hence only H.264 and
+  HEVC (`supports_smart_cut`), the two codecs whose headers travel that way.
+- **A copy is bounded by packet count, not time.** `-t` on a copy cuts by
+  decode timestamp, and with B-frames the next keyframe's DTS comes before its
+  picture, so a time bound lets it and a frame or two after it into the piece,
+  where they are shown twice at the seam. The keyframe index records each
+  keyframe's packet index (`keyframes.rs`), so `-frames:v` stops exactly at the
+  packet before the next keyframe. This is also why the index is cached in
+  `EditorState` and read at export time if the timeline never asked for it.
+- **A copy is asked to start a hair before its keyframe, with `-copypriorss
+  0`.** The seek lands on the last keyframe at or before the time given, and
+  the time is a decimal rounded from a rational; asking for exactly the
+  keyframe can land a whole group early in a container whose index rounds the
+  other way. Everything before the time asked for is discarded up to the first
+  keyframe past it, which is the one wanted whichever side the seek came down.
+- **Open groups of pictures.** A keyframe can be followed in the file by
+  pictures shown *before* it that refer to the previous group. The index counts
+  them (`leading`) and where they begin (`lead_start`). For HEVC they are
+  stripped from the first copied group with `filter_units=remove_types=6-9`
+  (RADL and RASL), that group is declared keyframe to keyframe so the *next*
+  group's leading pictures land inside its span, and the tail is re-encoded
+  from the leading pictures of the keyframe that ends the copy, which are
+  stored after it. H.264 gives its leading pictures no NAL type to drop by, so
+  an H.264 clip that would have to start a copy on such a keyframe is
+  re-encoded whole. `an_open_gop_hevc_source_is_cut_cleanly` drives this.
+- **Every piece states its duration in the concat list.** A transport stream's
+  own estimate comes up one frame short, which started every next piece a
+  frame early.
+- **NVENC returns an empty stream for a piece of a few frames** and exit code
+  zero; the concat demuxer then treats the empty piece as the end of the list
+  and the file just stops, and `-xerror` does not catch it. Pieces under a
+  second go to the software encoder (`SHORT_PIECE_SECONDS`), and the executor
+  fails any step whose last progress report wrote no frames.
+- **Rotation is restated on the join** with `-display_rotation`, because a
+  transport stream has nowhere to carry a display matrix and the pieces are
+  encoded with `-noautorotate` so they match the copied packets, which are
+  stored unrotated. The option takes the angle the way the probe read it,
+  before it was negated into the editor's clockwise number.
+- **The sound is re-encoded as one track.** A compressed audio packet is twenty
+  milliseconds and cannot be cut inside; copying it would put every seam that
+  far out of step, and encoding it per piece would leave the encoder's start-up
+  gap at each one. Each clip is read through its own seeked input and padded
+  and trimmed to exactly the length of its picture (`apad`, `atrim`), because a
+  sound track that ends before the video, as a screen recording's often does,
+  pulls everything after it out of step.
+
+The renderer mirrors the eligibility rule (`supportsSmartCut` in
+`src/domain/media.ts`) and estimates the re-encoded seconds
+(`smartCutReport`), which is what the export dialog's note and time estimate
+are built from.
+
+## The inspector column
+
+**The whole column is a drawer.** The strip between it and the stage is its
+handle: one click slides it away and gives the window to the picture, another
+brings it back. It animates `width` rather than swapping `display`, so the
+stage's `ResizeObserver` refits the frame as it travels instead of jumping, and
+it is `inert` while away or the keyboard would still tab into controls nobody
+can see. The handle carries the border the column used to draw, so the stage
+keeps a hard edge either way.
+
+Three panels — selection, media, blocks — each wrapped in `InspectorPanel`.
+Each folds to its title with the chevron and leaves the column with the cross;
+`features/inspector/panels.ts` remembers all three states in `localStorage`,
+and the menu beside the export button brings a panel back. A stored
+arrangement from before the drawer existed has no `open`, and the absence
+means "out", because that is what it was.
+
+The panels say almost nothing in prose: what they used to explain is the
+tooltip on the control it was about. Two things went for that reason and are
+not to come back — the sentence telling you to drag across the timeline, which
+is the one thing nobody needs telling, and the selection panel's two buttons
+sitting side by side, where the second got whatever room the first left it and
+arrived with its label cut off in Portuguese. They are stacked and full width,
+and `selection.lift` is one word.
+
+**Nothing here scrolls the column on its own.** Choosing a block used to pull
+the block list into view. Choosing a block is something you do while looking at
+the *timeline*, so that was a second thing moving for a decision already made.
+
+The two marks ("start here", "end here") live on the timeline's toolbar,
+beside the playhead they act on. The media rows show a frame of the file, taken
+from the filmstrip frames the timeline already reads, a third of the way in
+because the first frame of a recording is so often black.
+
+The preview is a player as well as a monitor: a click on the picture plays or
+pauses, and the bar along its bottom edge scrubs. Both move the store's one
+playhead, so the timeline follows and there is never a second position.
+
 ## The dock divider
 
 `features/timeline/dockSize.ts` owns every vertical size in the dock, and both
@@ -254,9 +359,12 @@ media falls back to the ordinary locations rather than failing every write.
   rotate=0`. Skip either half and phone clips export sideways.
 - **`concat` corrupts silently on mismatched inputs.** Every segment is forced to
   the same size, pixel format, sample aspect and frame rate before joining.
-- **A stream copy cannot draw a hole.** `ExportSpec::reconciled()` promotes the
-  mode when the timeline has one. The dialog shows this rather than letting the
-  backend do it quietly.
+- **A stream copy cannot draw a hole.** For a file that cannot be joined with
+  drawn pieces (anything but H.264 or HEVC in an indexed container, or one whose
+  cut points are unknown) `ExportSpec::reconciled()` promotes the mode when the
+  timeline has one. The dialog shows this rather than letting the backend do it
+  quietly. For every other file the hole is drawn as a piece and the footage
+  around it is copied; see "Exact cuts without re-encoding everything".
 - **A listed encoder is not a working encoder.** Every FFmpeg build bundled
   here carries `h264_nvenc`, so `-encoders` reports it on a machine with no
   NVIDIA card and the export dies at the first frame with `Cannot load
@@ -418,13 +526,34 @@ per-session counters with no meaning outside the run that minted them.
   by preventing the close and calling `destroy()` itself when the handler does
   not object — so without that permission, attaching a close handler stops the
   window closing *at all*, silently, including from the title bar.
-- **Exporting asks about unsaved work too.** An export writes a video and
-  leaves the edit exactly where it was, so the moment before waiting several
-  minutes for a file is the moment to notice that the cuts behind it are not on
-  disk. Same dialog, different words — `UnsavedReason` picks them, because
-  "closing" while somebody presses Export is a dialog nobody reads twice.
+- **Exporting never asks.** A project that has a file on disk is written
+  quietly before the dialog opens; one that has never been saved is simply
+  exported. It used to ask, and the question was one more thing between the
+  user and the file they had pressed the button for.
 - Autosave only writes a project that already has a path. Choosing a name and a
   place on the user's behalf while they are editing is not a rescue.
+- **A project opens even when every file it names is missing.** One video that
+  moved is the ordinary shape of a broken project, and refusing to open it left
+  an error about a path with nothing to repair. It opens with `source: null`,
+  its blocks in place and nothing to watch; the pool offers to find the file or
+  remove it, and the first file found becomes the source. The recents list does
+  the same for a project *file* that has moved: the row says so and offers to
+  find it or forget it, instead of a toast about a path.
+- **The timeline is locked while the file behind it is still being read.**
+  `selectLocked` is phases `opening` and `preparing` *plus* `pendingFrames > 0`,
+  which is exactly the condition `StripLoading` is drawn for — the two must stay
+  one expression, or the track looks busy and quietly takes a cut anyway, which
+  is what it did when the lock stopped at `preparing`. The preview is ready long
+  before the filmstrip is, and those seconds were the whole gap. Every store
+  action that records an edit returns early, the veil swallows the press rather
+  than merely ignoring it (the track answers a press by capturing the pointer
+  for a selection drag), and the toolbar's edits are disabled.
+- **Opening a project asks about unsaved work, like closing one.** Every door
+  out of an unsaved edit goes through the same question: the window closing, an
+  update replacing the application, *new project*, and *open a project* — which
+  was the one that did not, and swallowed the edit silently. `App` owns the
+  dialog, so the controls that lead there take a callback rather than opening
+  the picker themselves.
 - **Opening a project prepares every medium, not only the first.** A project is
   the one place several files arrive at once, and the preview is what the player
   reads: with only the first prepared, a project whose blocks all came from the
@@ -539,7 +668,7 @@ pnpm install
 pnpm app:dev            # Vite + Tauri, hot reload on both sides
 pnpm app:dev -- -- path/to/video.mp4   # open a file at launch
 
-pnpm typecheck          # tsc, strict
+pnpm typecheck          # tsc --build, strict, both projects
 pnpm test               # renderer unit tests
 pnpm i18n:check         # placeholder parity across locales, and dead keys
 cd src-tauri && cargo test              # 132 unit + 13 end-to-end

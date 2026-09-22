@@ -6,12 +6,13 @@ import { createPortal } from 'react-dom'
 import { formatTimecode } from '@domain/time'
 import { mediaOrder } from '@domain/timeline'
 import { ConfirmDialog } from '@presentation/components/ConfirmDialog'
-import { Broken, Folder, Image, Locate, Trash } from '@presentation/components/Icons'
+import { Broken, Film, Folder, Image, Locate, Trash } from '@presentation/components/Icons'
 import { cx, IconButton } from '@presentation/components/primitives'
 import { IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from '@presentation/features/chrome/OpenAnother'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { selectTimeline, useEditor } from '@presentation/state/editorStore'
 
+import { InspectorPanel } from './InspectorPanel'
 import { useMediaDrag, type MediaDragSource } from './mediaDrag'
 
 /** Movement, in pixels, before a press on a row becomes a drag onto the track. */
@@ -62,15 +63,16 @@ export function MediaPool() {
   const used = mediaOrder(timeline)
 
   return (
-    <section className="panel flex shrink-0 flex-col">
-      <header className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4">
-        <h2 className="eyebrow">{t('media.title')}</h2>
-        <IconButton label={t('media.add')} onClick={() => void choose()}>
+    <InspectorPanel
+      id="media"
+      title={t('media.title')}
+      aside={
+        <IconButton label={t('media.add')} onClick={() => void choose()} className="h-7 w-7">
           <Folder size={14} />
         </IconButton>
-      </header>
-
-      <ul className="max-h-[200px] min-h-0 space-y-1 overflow-y-auto px-2 pb-1">
+      }
+    >
+      <ul className="max-h-[240px] min-h-0 space-y-1 overflow-y-auto px-2 pb-1">
         <AnimatePresence initial={false}>
           {media.map((medium, index) => {
             const first = index === 0
@@ -134,9 +136,13 @@ export function MediaPool() {
         </ul>
       )}
 
-      <p className="px-4 pb-3 pt-1 text-[11px] leading-snug text-faint">
-        {empty ? t('media.empty') : t('media.hint')}
-      </p>
+      {/* The one sentence that stays: with nothing in the pool it is the only
+          sign of how a file gets in. How a file leaves the pool for the
+          timeline is the tooltip on each row. */}
+      {empty && (
+        <p className="px-4 pb-3 pt-1 text-[11px] leading-snug text-faint">{t('media.empty')}</p>
+      )}
+      {!empty && <div className="pb-2" />}
 
       <ConfirmDialog
         open={asking !== null}
@@ -153,7 +159,7 @@ export function MediaPool() {
       />
 
       <MediaDragGhost />
-    </section>
+    </InspectorPanel>
   )
 }
 
@@ -176,6 +182,19 @@ function MediaRow({
 }) {
   const t = useT()
   const addMedia = useEditor((state) => state.addMedia)
+
+  /**
+   * A frame of the file, so the row can be told apart by what it shows and not
+   * only by its name.
+   *
+   * Taken from the filmstrip frames the timeline already reads for this file,
+   * which cost nothing extra: one a third of the way in, because the first
+   * frame of a recording is so often black or a title card. The list for a
+   * medium is a stable reference until a frame lands, so this subscription
+   * re-renders the row only when its picture can change.
+   */
+  const frames = useEditor((state) => state.thumbnails[source.path])
+  const frame = frames && frames.length > 0 ? frames[Math.floor(frames.length / 3)] : undefined
 
   // Gesture bookkeeping, in refs: it is read on every pointer move and nothing
   // renders from it.
@@ -251,28 +270,45 @@ function MediaRow({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
-      className="flex min-w-0 flex-1 cursor-grab flex-col items-start text-left active:cursor-grabbing"
+      className="flex min-w-0 flex-1 cursor-grab items-center gap-2.5 text-left active:cursor-grabbing"
       title={`${source.path}\n${t('media.hint')}`}
     >
-      <span className={cx('w-full truncate text-[12px]', onTimeline ? 'text-paper' : 'text-faint')}>
-        {source.fileName}
-      </span>
-      <span className="flex items-center gap-1.5 text-faint">
-        <span className="timecode text-[10.5px]">
-          {formatTimecode(source.duration, { frames: false })}
-        </span>
-        {/* A still's number is a starting length, not the file's own. One word
-            inline, because the row has to stay one row; the sentence that says
-            it can be stretched at all is the tooltip. */}
-        {source.kind === 'still' && (
-          <span
-            className="inline-flex items-center gap-1 text-[10.5px] text-dusk-lift"
-            title={t('media.still')}
-          >
-            <Image size={11} />
-            {t('media.stillTag')}
-          </span>
+      <span className="relative flex h-9 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-line bg-ink-deep">
+        {frame ? (
+          <img
+            src={frame.dataUrl}
+            alt=""
+            draggable={false}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <Film size={16} className="text-faint" />
         )}
+      </span>
+
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span
+          className={cx('w-full truncate text-[12px]', onTimeline ? 'text-paper' : 'text-faint')}
+        >
+          {source.fileName}
+        </span>
+        <span className="flex items-center gap-1.5 text-faint">
+          <span className="timecode text-[10.5px]">
+            {formatTimecode(source.duration, { frames: false })}
+          </span>
+          {/* A still's number is a starting length, not the file's own. One
+              word inline, because the row has to stay one row; the sentence
+              that says it can be stretched at all is the tooltip. */}
+          {source.kind === 'still' && (
+            <span
+              className="inline-flex items-center gap-1 text-[10.5px] text-dusk-lift"
+              title={t('media.still')}
+            >
+              <Image size={11} />
+              {t('media.stillTag')}
+            </span>
+          )}
+        </span>
       </span>
     </button>
   )

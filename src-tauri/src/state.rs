@@ -4,6 +4,7 @@ use std::sync::Mutex;
 use tokio::sync::watch;
 
 use crate::domain::media::MediaSource;
+use crate::infrastructure::ffmpeg::keyframes::Keyframes;
 
 /// Process-wide editor state.
 ///
@@ -21,6 +22,12 @@ pub struct EditorState {
     /// The first file opened. It decides the output format, and it is the one a
     /// destination is suggested beside.
     primary: Mutex<Option<String>>,
+    /// Cut points already read for a file, keyed like the media.
+    ///
+    /// Read once for the timeline and kept, because an export that copies
+    /// packets needs the same list, and reading a two-hour file's index a
+    /// second time is a wait nobody asked for.
+    keyframes: Mutex<HashMap<String, Keyframes>>,
     jobs: Mutex<HashMap<String, watch::Sender<bool>>>,
 }
 
@@ -44,12 +51,25 @@ impl EditorState {
         self.media(&path)
     }
 
+    pub fn remember_keyframes(&self, path: &str, keyframes: Keyframes) {
+        if let Ok(mut table) = self.keyframes.lock() {
+            table.insert(path.to_string(), keyframes);
+        }
+    }
+
+    pub fn keyframes(&self, path: &str) -> Option<Keyframes> {
+        self.keyframes.lock().ok().and_then(|guard| guard.get(path).cloned())
+    }
+
     /// Drops one file from the pool. The primary is only given up when the file
     /// being dropped is it, so removing a later addition cannot change which
     /// format the project exports in.
     pub fn forget(&self, path: &str) {
         if let Ok(mut media) = self.media.lock() {
             media.remove(path);
+        }
+        if let Ok(mut keyframes) = self.keyframes.lock() {
+            keyframes.remove(path);
         }
         if let Ok(mut primary) = self.primary.lock() {
             if primary.as_deref() == Some(path) {
@@ -61,6 +81,9 @@ impl EditorState {
     pub fn forget_all(&self) {
         if let Ok(mut media) = self.media.lock() {
             media.clear();
+        }
+        if let Ok(mut keyframes) = self.keyframes.lock() {
+            keyframes.clear();
         }
         if let Ok(mut primary) = self.primary.lock() {
             *primary = None;
@@ -150,5 +173,17 @@ mod tests {
 
         assert!(*a.borrow());
         assert!(*b.borrow());
+    }
+
+    /// The index follows the file out of the pool: a file reopened later may be
+    /// a different file under the same name.
+    #[test]
+    fn forgetting_a_file_drops_its_cut_points() {
+        let state = EditorState::default();
+        state.remember_keyframes("a.mp4", Keyframes::default());
+        assert!(state.keyframes("a.mp4").is_some());
+
+        state.forget("a.mp4");
+        assert!(state.keyframes("a.mp4").is_none());
     }
 }

@@ -29,6 +29,7 @@ export const en = {
   'preview.proxyTooltip': 'Scrubbing uses a smaller copy. Exporting always reads the original file.',
   'preview.hole': 'Hole',
   'preview.holeNote': 'Black and silent here',
+  'preview.scrub': 'Drag to move through the video',
 
   'transport.play': 'Play',
   'transport.pause': 'Pause',
@@ -41,8 +42,6 @@ export const en = {
   'transport.toEnd': 'Go to end',
 
   'selection.title': 'Selection',
-  'selection.empty': 'Drag across the timeline to mark what to take out.',
-  'selection.emptyHint': 'Or press I and O to set the two edges at the playhead.',
   'selection.in': 'In',
   'selection.out': 'Out',
   'selection.length': 'Length',
@@ -50,7 +49,7 @@ export const en = {
   'selection.setOut': 'End here',
   'selection.clear': 'Clear selection',
   'selection.remove': 'Remove selection',
-  'selection.lift': 'Lift out to move',
+  'selection.lift': 'Lift out',
   'selection.liftHint': 'Turns the selection into its own block so you can drag it elsewhere.',
   'selection.selectAll': 'Select everything',
   'selection.onlyHole': 'The rails are over a hole. There is nothing there to take out.',
@@ -64,11 +63,10 @@ export const en = {
   'project.open': 'Open a project',
   'project.recent': 'Pick up where you left off',
   'project.forget': 'Remove from this list',
+  'project.missing': 'This project is no longer where it was.',
+  'project.locate': 'Find it…',
   'project.unsavedTitle': 'Save this project before closing?',
   'project.unsavedBody': 'The cuts you have made are not on disk yet. Closing now loses them.',
-  'project.unsavedTitleExport': 'Save this project before exporting?',
-  'project.unsavedBodyExport': 'The cuts you have made are not on disk yet. The export writes a video, not a project.',
-  'project.discardExport': 'Export without saving',
   'project.discard': 'Close without saving',
   'project.keepEditing': 'Keep editing',
   'project.saved': 'Saved',
@@ -106,8 +104,6 @@ export const en = {
   'blocks.trimEnd': 'Trim the end',
   'blocks.hole': 'Hole',
   'blocks.reorderRow': 'Drag to change the order',
-  'blocks.reorderHint': 'Drag a block by its handle to change the order.',
-  'blocks.moveHint': 'Drag a block by its handle to move it along the timeline.',
 
   'timeline.snapCuts': 'Snap cuts to cut points, so the export can just copy',
   'timeline.edgeScroll': 'Follow a drag to the edge of the window',
@@ -120,6 +116,7 @@ export const en = {
   'timeline.empty': 'Nothing on the timeline. Drag a file here from Media, or undo.',
   'timeline.removed': '{removed} removed',
   'timeline.loadingFrames': 'Reading the frames…',
+  'timeline.locked': 'Preparing the project. The timeline unlocks when it is ready.',
 
   'history.undo': 'Undo',
   'history.redo': 'Redo',
@@ -130,9 +127,9 @@ export const en = {
   'export.subtitle': 'Choose how much work to spend on the result.',
   'export.mode': 'Method',
   'export.mode.fast': 'Copy',
-  'export.mode.fast.summary': 'Seconds. Identical quality.',
+  'export.mode.fast.summary': 'Seconds. Exact cuts, original quality.',
   'export.mode.fast.detail':
-    'Nothing is re-encoded, so the result is bit for bit the original and no processor or graphics work is needed. Cuts can only land on a cut point, and the timeline snaps to them, so this is normally exact.',
+    'The video is copied rather than re-encoded, so it finishes at disk speed and keeps the original quality. Only the frames beside each cut are re-encoded, so every cut lands on the frame you chose.',
   'export.mode.precise': 'Precise',
   'export.mode.precise.summary': 'Minutes. Cuts land on the exact frame.',
   'export.mode.precise.detail':
@@ -146,6 +143,7 @@ export const en = {
   'export.mode.forcedByStill': 'An image has to be drawn for as long as it is shown, so this export re-encodes.',
 
   'export.lossless.exact': 'Exact cuts. Nothing is re-encoded.',
+  'export.lossless.partial': 'Exact cuts. About {time} beside the cuts is re-encoded; the rest is copied untouched.',
   'export.lossless.shift': 'Cuts move back up to {shift} to reach the nearest cut point.',
   'export.lossless.anywhere': 'This video can be cut anywhere without re-encoding.',
   'export.lossless.reading': 'Finding the cut points…',
@@ -213,7 +211,6 @@ export const en = {
   'hint.cancelExport': 'Stop the export. The file is left unwritten.',
   'hint.reveal': 'Open the folder with the file selected',
   'hint.dismissExport': 'Close this and go back to the edit',
-  'hint.discardExport': 'Go straight to the export and leave the project unsaved',
   'hint.discard': 'Leave without writing anything to disk',
   'hint.keepEditing': 'Go back to the edit and change nothing',
   'hint.saveProject': 'Write the project, then carry on leaving',
@@ -275,6 +272,13 @@ export const en = {
   'skin.dusk': 'Dusk',
   'skin.slate': 'Slate',
   'skin.paper': 'Paper',
+
+  'panels.label': 'Panels',
+  'panels.hideColumn': 'Hide the panels',
+  'panels.showColumn': 'Show the panels',
+  'panels.collapse': 'Collapse',
+  'panels.expand': 'Expand',
+  'panels.hide': 'Hide this panel',
 
   'about.author': 'by OmTsTM',
   'about.project': 'Snip Join on GitHub',

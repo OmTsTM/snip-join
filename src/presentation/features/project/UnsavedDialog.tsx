@@ -4,18 +4,8 @@ import { useEffect } from 'react'
 import { Button } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
 
-/**
- * What is about to happen to the unsaved work.
- *
- * Leaving loses it; exporting does not. The same three answers mean different
- * things in each case, and a dialog that says "closing" while somebody presses
- * Export is a dialog nobody reads twice.
- */
-export type UnsavedReason = 'leaving' | 'exporting'
-
 interface UnsavedDialogProps {
   readonly open: boolean
-  readonly reason: UnsavedReason
   readonly onSave: () => void
   readonly onDiscard: () => void
   readonly onCancel: () => void
@@ -24,20 +14,18 @@ interface UnsavedDialogProps {
 /**
  * The question asked before unsaved work would be lost.
  *
+ * Only before it would be lost: closing the project, or an update replacing
+ * the application underneath it. Exporting used to ask too, and does not any
+ * more — an export leaves the edit exactly where it was, so a saved project is
+ * written quietly first and an unsaved one is simply exported.
+ *
  * Three answers rather than two, and the third is not a nicety: "close without
  * saving" and "do not close" are different decisions, and a dialog that offers
  * only one of them makes the other reachable solely by getting the first one
  * wrong. Discarding is the quiet one — it is the answer that destroys something.
  */
-export function UnsavedDialog({
-  open,
-  reason,
-  onSave,
-  onDiscard,
-  onCancel,
-}: UnsavedDialogProps) {
+export function UnsavedDialog({ open, onSave, onDiscard, onCancel }: UnsavedDialogProps) {
   const t = useT()
-  const exporting = reason === 'exporting'
 
   useEffect(() => {
     if (!open) return
@@ -79,26 +67,21 @@ export function UnsavedDialog({
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
             role="dialog"
             aria-modal="true"
-            aria-label={t(exporting ? 'project.unsavedTitleExport' : 'project.unsavedTitle')}
+            aria-label={t('project.unsavedTitle')}
             className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-line-bright bg-panel shadow-[0_40px_100px_-30px_rgba(0,0,0,0.9)]"
           >
             <div className="px-5 pb-4 pt-5">
               <h2 className="font-display text-[15px] font-semibold tracking-tight text-paper">
-                {t(exporting ? 'project.unsavedTitleExport' : 'project.unsavedTitle')}
+                {t('project.unsavedTitle')}
               </h2>
               <p className="mt-2 text-[12.5px] leading-snug text-muted">
-                {t(exporting ? 'project.unsavedBodyExport' : 'project.unsavedBody')}
+                {t('project.unsavedBody')}
               </p>
             </div>
 
             <div className="flex items-center gap-2 border-t border-line px-5 py-3">
-              <Button
-                size="sm"
-                tone={exporting ? 'quiet' : 'danger'}
-                title={t(exporting ? 'hint.discardExport' : 'hint.discard')}
-                onClick={onDiscard}
-              >
-                {t(exporting ? 'project.discardExport' : 'project.discard')}
+              <Button size="sm" tone="danger" title={t('hint.discard')} onClick={onDiscard}>
+                {t('project.discard')}
               </Button>
               <div className="flex-1" />
               <Button size="sm" tone="quiet" title={t('hint.keepEditing')} onClick={onCancel}>

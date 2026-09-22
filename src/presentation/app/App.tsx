@@ -2,8 +2,8 @@ import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { Export as ExportIcon, Save as SaveIcon } from '@presentation/components/Icons'
-import { Button } from '@presentation/components/primitives'
+import { Chevron, Export as ExportIcon, Save as SaveIcon } from '@presentation/components/Icons'
+import { Button, cx } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
 import { ExportDialog } from '@presentation/features/export/ExportDialog'
 import { ShortcutsDialog } from '@presentation/features/chrome/ShortcutsDialog'
@@ -17,7 +17,9 @@ import { DockResizer } from '@presentation/features/timeline/DockResizer'
 import { TimelineDock } from '@presentation/features/timeline/TimelineDock'
 import { useOpenVideo } from '@presentation/features/chrome/OpenAnother'
 import { Welcome } from '@presentation/features/welcome/Welcome'
-import { UnsavedDialog, type UnsavedReason } from '@presentation/features/project/UnsavedDialog'
+import { PanelsMenu } from '@presentation/features/inspector/InspectorPanel'
+import { usePanels } from '@presentation/features/inspector/panels'
+import { UnsavedDialog } from '@presentation/features/project/UnsavedDialog'
 import { AUTOSAVE_INTERVAL_MS, useProjectActions } from '@presentation/features/project/useProject'
 import { useShortcuts } from '@presentation/hooks/useShortcuts'
 import { api } from '@infrastructure/tauri/api'
@@ -40,12 +42,15 @@ export function App() {
   const [dropActive, setDropActive] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
-  const [askingToSave, setAskingToSave] = useState<UnsavedReason | null>(null)
+  const [askingToSave, setAskingToSave] = useState(false)
 
   const dirty = useEditor(selectDirty)
   const projectPath = useEditor((state) => state.projectPath)
   const { saveNow, openExisting } = useProjectActions()
   const chooseVideo = useOpenVideo()
+
+  const inspectorOpen = usePanels((state) => state.open)
+  const setInspectorOpen = usePanels((state) => state.setOpen)
 
   /**
    * Asks about unsaved work, and answers whether it is all right to go ahead.
@@ -61,25 +66,18 @@ export function App() {
    */
   const answer = useRef<((proceed: boolean) => void) | null>(null)
 
-  const askAboutUnsavedWork = useCallback(
-    (reason: UnsavedReason = 'leaving'): Promise<boolean> => {
-      const { media, history, savedMark } = useEditor.getState()
+  const askAboutUnsavedWork = useCallback((): Promise<boolean> => {
+    const state = useEditor.getState()
+    if (!selectDirty(state)) return Promise.resolve(true)
 
-      const unsaved =
-        media.length > 0 &&
-        (!savedMark || savedMark.timeline !== history.present || savedMark.media !== media)
-      if (!unsaved) return Promise.resolve(true)
-
-      setAskingToSave(reason)
-      return new Promise<boolean>((resolve) => {
-        answer.current = resolve
-      })
-    },
-    [],
-  )
+    setAskingToSave(true)
+    return new Promise<boolean>((resolve) => {
+      answer.current = resolve
+    })
+  }, [])
 
   const settle = useCallback((proceed: boolean) => {
-    setAskingToSave(null)
+    setAskingToSave(false)
     answer.current?.(proceed)
     answer.current = null
   }, [])
@@ -87,17 +85,18 @@ export function App() {
   // Guarded here rather than only on the button, so the keyboard cannot reach
   // the dialog for a timeline that would produce no file.
   const showExport = useCallback(() => {
-    if (useEditor.getState().history.present.blocks.length === 0) return
+    const state = useEditor.getState()
+    if (state.history.present.blocks.length === 0) return
 
-    // Asked before the dialog rather than after it, because the answer changes
-    // what somebody does next: an export writes a video and leaves the edit
-    // exactly where it was, unsaved. The moment before waiting several minutes
-    // for a file is the moment to notice that the cuts behind it are not on
-    // disk.
-    void askAboutUnsavedWork('exporting').then((proceed) => {
-      if (proceed) setExportOpen(true)
-    })
-  }, [askAboutUnsavedWork])
+    // A project that already has a file on disk is written before the dialog
+    // opens, and quietly: an export is the moment the edit is worth keeping,
+    // and a question about saving is one more thing between the user and the
+    // file they asked for. A project that has never been saved is left alone.
+    // Choosing a name and a place on their behalf is not what they asked for
+    // either, and the export does not need one.
+    if (state.projectPath && selectDirty(state)) void state.saveProject()
+    setExportOpen(true)
+  }, [])
   const showShortcuts = useCallback(() => setShortcutsOpen((open) => !open), [])
 
   // Asking the window to close, rather than closing anything here: the handler
@@ -105,11 +104,28 @@ export function App() {
   // should not learn it a second time.
   const requestClose = useCallback(() => void getCurrentWindow().close(), [])
 
+  /**
+   * Opens a saved project in place of this one, asking first.
+   *
+   * Opening another project loses the edit in this window exactly as closing
+   * it does, so it is the same question. It used to be asked on the way out
+   * and on the way to a *new* project, but not here, which made "open a
+   * project" the one door out of an unsaved edit that swallowed it silently.
+   */
+  const openAnotherProject = useCallback(
+    () =>
+      askAboutUnsavedWork().then((proceed) => {
+        if (proceed) return openExisting()
+        return undefined
+      }),
+    [askAboutUnsavedWork, openExisting],
+  )
+
   useShortcuts({
     onExport: showExport,
     onShowShortcuts: showShortcuts,
     onOpenVideo: () => void chooseVideo(),
-    onOpenProject: () => void openExisting(),
+    onOpenProject: () => void openAnotherProject(),
     onClose: requestClose,
   })
 
@@ -210,7 +226,7 @@ export function App() {
       // A dismissed picker is not a save, and going ahead on it would throw away
       // the work the question was asked about.
       if (written) settle(true)
-      else setAskingToSave(null)
+      else setAskingToSave(false)
     })
   }, [saveNow, settle])
 
@@ -296,6 +312,7 @@ export function App() {
         onShowShortcuts={showShortcuts}
         onBeforeReplace={askAboutUnsavedWork}
         onNewProject={startNewProject}
+        onOpenProject={openAnotherProject}
       />
 
       {editing ? (
@@ -306,58 +323,104 @@ export function App() {
               <Transport />
             </section>
 
-            <aside className="flex w-[312px] shrink-0 flex-col border-l border-line bg-ink/40">
-              {/*
-                Pinned at the top rather than under the panel.
+            {/*
+              The drawer's handle, and the only way back once the column is
+              away. A full-height strip rather than a button in a corner: it
+              is the edge of the panel, so the edge is what you press, and it
+              stays exactly where it was whichever side of the gesture you are
+              on. It carries the border the column used to draw, so the stage
+              keeps a hard edge either way.
+            */}
+            <button
+              type="button"
+              onClick={() => setInspectorOpen(!inspectorOpen)}
+              title={inspectorOpen ? t('panels.hideColumn') : t('panels.showColumn')}
+              aria-label={inspectorOpen ? t('panels.hideColumn') : t('panels.showColumn')}
+              aria-expanded={inspectorOpen}
+              className="group flex w-4 shrink-0 items-center justify-center border-l border-line bg-ink/40 transition-colors duration-150 hover:bg-raised"
+            >
+              <Chevron
+                size={13}
+                className={cx(
+                  'text-faint transition-[transform,color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                  'group-hover:text-paper motion-reduce:transition-none',
+                  inspectorOpen ? '-rotate-90' : 'rotate-90',
+                )}
+              />
+            </button>
 
-                It is still the control the whole column leads to, but at the
-                bottom it cost every list above it a row's height — on an
-                ordinary window the media and the blocks were both a scroll away,
-                so a project drawing on several files did not look like one. Up
-                here it is reachable at any window size and the two lists start
-                higher.
-              */}
-              {/* Saving beside exporting, and narrower: they are the two ways
-                  work leaves this window, but only one of them is what you do
-                  before you walk away from it. */}
-              <div className="flex shrink-0 items-center gap-2 border-b border-line p-3">
-                <Button
-                  tone="neutral"
-                  size="md"
-                  disabled={!canExport}
-                  title={dirty ? t('project.unsaved') : t('project.saved')}
-                  onClick={() => void saveNow()}
-                  icon={<SaveIcon size={15} />}
-                  className="relative"
-                >
-                  {t('project.save')}
-                  {dirty && (
-                    <span
-                      aria-hidden="true"
-                      className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-dusk-lift"
-                    />
-                  )}
-                </Button>
+            {/*
+              Width rather than display, so the column slides instead of
+              blinking out, and the stage's `ResizeObserver` refits the picture
+              as it travels. `inert` while it is away, or the keyboard would
+              still walk into controls nobody can see.
+            */}
+            <aside
+              inert={!inspectorOpen}
+              className={cx(
+                'flex shrink-0 flex-col overflow-hidden bg-ink/40',
+                'transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                inspectorOpen ? 'w-[312px]' : 'w-0',
+              )}
+            >
+              <div className="flex h-full w-[312px] flex-col">
+                {/*
+                  Pinned at the top rather than under the panel.
 
-                <Button
-                  tone="paper"
-                  size="md"
-                  full
-                  disabled={!canExport}
-                  title={canExport ? undefined : t('export.nothing')}
-                  onClick={showExport}
-                  icon={<ExportIcon size={15} />}
-                >
-                  {t('export.open')}
-                </Button>
-              </div>
+                  It is still the control the whole column leads to, but at
+                  the bottom it cost every list above it a row's height — on
+                  an ordinary window the media and the blocks were both a
+                  scroll away, so a project drawing on several files did not
+                  look like one. Up here it is reachable at any window size
+                  and the two lists start higher.
+                */}
+                {/* Saving beside exporting, and narrower: they are the two
+                    ways work leaves this window, but only one of them is what
+                    you do before you walk away from it. */}
+                <div className="flex shrink-0 items-center gap-2 border-b border-line p-3">
+                  <Button
+                    tone="neutral"
+                    size="md"
+                    disabled={!canExport}
+                    title={dirty ? t('project.unsaved') : t('project.saved')}
+                    onClick={() => void saveNow()}
+                    icon={<SaveIcon size={15} />}
+                    className="relative"
+                  >
+                    {t('project.save')}
+                    {dirty && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-dusk-lift"
+                      />
+                    )}
+                  </Button>
 
-              {/* Scrolls as one column. A short stage must cost the user scroll
-                  distance, never a control they can no longer reach. */}
-              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
-                <SelectionPanel />
-                <MediaPool />
-                <BlockList />
+                  <Button
+                    tone="paper"
+                    size="md"
+                    full
+                    disabled={!canExport}
+                    title={canExport ? undefined : t('export.nothing')}
+                    onClick={showExport}
+                    icon={<ExportIcon size={15} />}
+                  >
+                    {t('export.open')}
+                  </Button>
+
+                  {/* Which panels the column shows. A panel put away with its
+                      own button comes back from here. */}
+                  <PanelsMenu />
+                </div>
+
+                {/* Scrolls as one column. A short stage must cost the user
+                    scroll distance, never a control they can no longer
+                    reach. */}
+                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+                  <SelectionPanel />
+                  <MediaPool />
+                  <BlockList />
+                </div>
               </div>
             </aside>
           </div>
@@ -370,8 +433,7 @@ export function App() {
       )}
 
       <UnsavedDialog
-        open={askingToSave !== null}
-        reason={askingToSave ?? 'leaving'}
+        open={askingToSave}
         onSave={saveThenProceed}
         onDiscard={() => settle(true)}
         onCancel={() => settle(false)}

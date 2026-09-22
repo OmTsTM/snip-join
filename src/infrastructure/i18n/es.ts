@@ -25,6 +25,7 @@ export const es: Catalogue = {
     'El desplazamiento usa una copia más pequeña. La exportación siempre lee el archivo original.',
   'preview.hole': 'Hueco',
   'preview.holeNote': 'Aquí queda negro y en silencio',
+  'preview.scrub': 'Arrastra para recorrer el vídeo',
 
   'transport.play': 'Reproducir',
   'transport.pause': 'Pausar',
@@ -37,8 +38,6 @@ export const es: Catalogue = {
   'transport.toEnd': 'Ir al final',
 
   'selection.title': 'Selección',
-  'selection.empty': 'Arrastra sobre la línea de tiempo para marcar qué quitar.',
-  'selection.emptyHint': 'O pulsa I y O para fijar los dos bordes en el cursor.',
   'selection.in': 'Inicio',
   'selection.out': 'Fin',
   'selection.length': 'Duración',
@@ -46,7 +45,7 @@ export const es: Catalogue = {
   'selection.setOut': 'Fin aquí',
   'selection.clear': 'Borrar selección',
   'selection.remove': 'Quitar selección',
-  'selection.lift': 'Separar para mover',
+  'selection.lift': 'Separar',
   'selection.liftHint':
     'Convierte la selección en un bloque propio para que puedas arrastrarlo a otro sitio.',
   'selection.selectAll': 'Seleccionar todo',
@@ -61,11 +60,10 @@ export const es: Catalogue = {
   'project.open': 'Abrir un proyecto',
   'project.recent': 'Sigue donde lo dejaste',
   'project.forget': 'Quitar de esta lista',
+  'project.missing': 'Este proyecto ya no está donde estaba.',
+  'project.locate': 'Buscarlo…',
   'project.unsavedTitle': '¿Guardar este proyecto antes de cerrar?',
   'project.unsavedBody': 'Los cortes que has hecho aún no están en el disco. Cerrar ahora los pierde.',
-  'project.unsavedTitleExport': '¿Guardar este proyecto antes de exportar?',
-  'project.unsavedBodyExport': 'Los cortes que hiciste aún no están en el disco. La exportación escribe un vídeo, no un proyecto.',
-  'project.discardExport': 'Exportar sin guardar',
   'project.discard': 'Cerrar sin guardar',
   'project.keepEditing': 'Seguir editando',
   'project.saved': 'Guardado',
@@ -103,8 +101,6 @@ export const es: Catalogue = {
   'blocks.trimEnd': 'Ajustar el final',
   'blocks.hole': 'Hueco',
   'blocks.reorderRow': 'Arrastra para cambiar el orden',
-  'blocks.reorderHint': 'Arrastra un bloque por su asa para cambiar el orden.',
-  'blocks.moveHint': 'Arrastra un bloque por su asa para moverlo por la línea de tiempo.',
 
   'timeline.snapCuts': 'Ajustar los cortes a los puntos de corte, para que la exportación solo copie',
   'timeline.edgeScroll': 'Seguir el arrastre hasta el borde de la ventana',
@@ -117,6 +113,7 @@ export const es: Catalogue = {
   'timeline.empty': 'No hay nada en la línea de tiempo. Arrastra un archivo desde Medios, o deshaz.',
   'timeline.removed': '{removed} quitados',
   'timeline.loadingFrames': 'Leyendo los fotogramas…',
+  'timeline.locked': 'Preparando el proyecto. La línea de tiempo se desbloquea cuando esté listo.',
 
   'history.undo': 'Deshacer',
   'history.redo': 'Rehacer',
@@ -127,9 +124,9 @@ export const es: Catalogue = {
   'export.subtitle': 'Elige cuánto trabajo dedicar al resultado.',
   'export.mode': 'Método',
   'export.mode.fast': 'Copia',
-  'export.mode.fast.summary': 'Segundos. Calidad idéntica.',
+  'export.mode.fast.summary': 'Segundos. Cortes exactos, calidad original.',
   'export.mode.fast.detail':
-    'No se recodifica nada, así que el resultado es bit a bit el original y no exige trabajo del procesador ni de la tarjeta gráfica. Los cortes solo pueden caer en un punto de corte, y la línea de tiempo se ajusta a ellos, así que normalmente queda exacto.',
+    'El vídeo se copia en vez de recodificarse, así que termina a la velocidad del disco y conserva la calidad original. Solo se recodifican los fotogramas junto a cada corte, para que cada corte caiga en el fotograma que elegiste.',
   'export.mode.precise': 'Preciso',
   'export.mode.precise.summary': 'Minutos. Los cortes caen en el fotograma exacto.',
   'export.mode.precise.detail':
@@ -143,6 +140,7 @@ export const es: Catalogue = {
   'export.mode.forcedByStill': 'Una imagen hay que dibujarla durante todo el tiempo que se ve, así que esta exportación recodifica.',
 
   'export.lossless.exact': 'Cortes exactos. No se recodifica nada.',
+  'export.lossless.partial': 'Cortes exactos. Unos {time} junto a los cortes se recodifican; el resto se copia sin cambios.',
   'export.lossless.shift': 'Los cortes retroceden hasta {shift} para llegar al punto de corte más cercano.',
   'export.lossless.anywhere': 'Este vídeo se puede cortar en cualquier punto sin recodificar.',
   'export.lossless.reading': 'Buscando los puntos de corte…',
@@ -210,7 +208,6 @@ export const es: Catalogue = {
   'hint.cancelExport': 'Detiene la exportación. El archivo no se escribe.',
   'hint.reveal': 'Abre la carpeta con el archivo seleccionado',
   'hint.dismissExport': 'Cierra esto y vuelve a la edición',
-  'hint.discardExport': 'Va directo a la exportación y deja el proyecto sin guardar',
   'hint.discard': 'Sale sin escribir nada en el disco',
   'hint.keepEditing': 'Vuelve a la edición sin cambiar nada',
   'hint.saveProject': 'Guarda el proyecto y sigue saliendo',
@@ -272,6 +269,13 @@ export const es: Catalogue = {
   'skin.dusk': 'Anochecer',
   'skin.slate': 'Pizarra',
   'skin.paper': 'Papel',
+
+  'panels.label': 'Paneles',
+  'panels.hideColumn': 'Ocultar los paneles',
+  'panels.showColumn': 'Mostrar los paneles',
+  'panels.collapse': 'Plegar',
+  'panels.expand': 'Desplegar',
+  'panels.hide': 'Ocultar este panel',
 
   'about.author': 'por OmTsTM',
   'about.project': 'Snip Join en GitHub',

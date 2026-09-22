@@ -148,17 +148,19 @@ first. Close again from there and it really does quit.
 
 ## Cutting without re-encoding
 
-The default. Nothing is decoded and nothing is encoded, so a cut finishes in
-seconds and uses essentially no processor or graphics card — the same idea as
-LosslessCut, on any machine.
+The default. The video is copied rather than decoded and encoded again, so a
+cut finishes in seconds and uses essentially no processor or graphics card — the
+same idea as LosslessCut, on any machine.
 
-The catch with any copy-based cut is that it can only begin on a keyframe, which
-usually means your cut quietly slides backwards by a second or two. Snip Join
-shows you those positions as small marks above the timeline and snaps the
-selection onto them, so the cut lands exactly where you see it. The export dialog
-confirms it in words: **"Exact cuts. Nothing is re-encoded."** — and if an edge
-did end up between two of them, it tells you how far it will move instead of
-letting you find out afterwards.
+The catch with any copy-based cut is that a copy can only begin on a keyframe,
+which in most tools means your cut quietly slides backwards by a second or two.
+Snip Join does two things about it. The timeline shows those positions as small
+marks above the track and snaps the selection onto them, so a cut placed on one
+copies everything and touches nothing. And a cut placed *between* two of them
+still lands on the frame you chose: only the few frames between the cut and the
+nearest keyframe are re-encoded, the rest of the video is copied as it is, and
+the dialog tells you how much that is — usually a second or two out of the
+whole file.
 
 <p align="center">
   <img src="docs/screenshot-export.png" alt="The export dialog with Copy selected and the line Exact cuts, nothing is re-encoded" width="640">
@@ -169,8 +171,11 @@ letting you find out afterwards.
   anything runs — and estimates about a second for a forty second file.</em>
 </p>
 
-If you need a cut on one specific frame rather than the nearest cut point, that
-is what **Precise** is for.
+**Precise** re-encodes the whole video instead, and is what runs when a copy
+cannot honour the timeline: several files on it, an image, or a video in a
+format whose packets cannot be joined with re-encoded ones (Copy handles H.264
+and H.265 in MP4, MOV, MKV and WebM, which is nearly everything a phone, a
+camera or a screen recorder writes).
 
 ## Exporting
 
@@ -178,17 +183,14 @@ Three methods, and the difference is minutes of your time:
 
 | | Speed | What happens |
 | --- | --- | --- |
-| **Copy** | Seconds | Nothing is re-encoded, and no processor or graphics work is needed. The result is bit for bit the original. Cuts land on cut points, which the timeline snaps to. |
+| **Copy** | Seconds | The video is copied, not re-encoded, and keeps its original quality. Only the frames beside each cut are re-encoded, so every cut lands on the frame you chose. A hole is drawn in between. |
 | **Precise** | Minutes | Re-encoded so every cut lands on the exact frame you chose. Quality is set to be indistinguishable from the source. |
 | **Enhanced** | Longer | Precise, plus upscaling and clean-up. Expect several times the length of the video. |
 
-Copy is unavailable when the timeline has a hole — a hole has to be drawn, and
-nothing can be drawn into a copied stream. The dialog says so rather than quietly
-taking four minutes over what you asked to take four seconds.
-
-<p align="center">
-  <img src="docs/screenshot-export-hole.png" alt="The same dialog with a hole on the timeline: Copy greyed out, Precise selected, and the line a hole cannot be copied so this export re-encodes" width="640">
-</p>
+Where Copy cannot honour the timeline — more than one file, an image, or a hole
+in a video whose format does not allow it — the dialog says so and picks Precise,
+rather than quietly taking four minutes over what you asked to take four
+seconds.
 
 ### Enhanced
 

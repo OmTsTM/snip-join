@@ -44,6 +44,9 @@ const DURATIONS: Record<string, number> = { 'a.mp4': 60, 'b.mp4': 20 }
 /** The disk, as far as these tests are concerned. */
 const written = new Map<string, string>()
 
+/** Media that have gone missing between a save and the open that follows. */
+const gone = new Set<string>()
+
 vi.mock('@tauri-apps/api/core', () => ({
   convertFileSrc: (path: string) => `asset://${path}`,
 }))
@@ -53,7 +56,10 @@ vi.mock('@infrastructure/tauri/api', async (importOriginal) => {
   return {
     ...actual,
     api: {
-      openMedia: async (path: string) => info(path, DURATIONS[path] ?? 10),
+      openMedia: async (path: string) => {
+        if (gone.has(path)) throw new Error(`${path} is not there`)
+        return info(path, DURATIONS[path] ?? 10)
+      },
       closeMedia: async () => undefined,
       forgetMedia: async () => undefined,
       capabilities: async () => {
@@ -81,10 +87,28 @@ vi.mock('@infrastructure/tauri/api', async (importOriginal) => {
   }
 })
 
-const { useEditor, selectPreviewUrl } = await import('./editorStore')
+const { useEditor, selectCanExport, selectPreviewUrl } = await import('./editorStore')
 
 /** Previews that are not awaited still land in a microtask or two. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+/**
+ * Opens a file and waits until the timeline will accept an edit.
+ *
+ * Cutting is refused while the frames are still arriving, so a test that
+ * edits the moment `openFile` resolves is testing the lock rather than the
+ * edit it meant to. The wait is what a user does by watching the strip fill.
+ */
+async function openReady(path: string): Promise<void> {
+  await useEditor.getState().openFile(path)
+  await settle()
+}
+
+/** The same, for a file added to a project that is already open. */
+async function addReady(path: string, at?: number): Promise<void> {
+  await useEditor.getState().addMedia(path, at)
+  await settle()
+}
 
 describe('opening a project that was saved', () => {
   beforeEach(async () => {
@@ -93,7 +117,7 @@ describe('opening a project that was saved', () => {
   })
 
   it('brings the picture back with the edit', async () => {
-    await useEditor.getState().openFile('a.mp4')
+    await openReady('a.mp4')
     useEditor.getState().seek(20)
     useEditor.getState().splitAtPlayhead()
     expect(await useEditor.getState().saveProject('edit.snipjoin')).toBe(true)
@@ -113,8 +137,8 @@ describe('opening a project that was saved', () => {
    * blank player from the moment the playhead reached the second one.
    */
   it('prepares every medium, not only the first', async () => {
-    await useEditor.getState().openFile('a.mp4')
-    await useEditor.getState().addMedia('b.mp4')
+    await openReady('a.mp4')
+    await addReady('b.mp4')
     expect(await useEditor.getState().saveProject('two.snipjoin')).toBe(true)
 
     await useEditor.getState().closeFile()
@@ -127,7 +151,7 @@ describe('opening a project that was saved', () => {
   })
 
   it('remembers where the project was saved, so the next save asks nothing', async () => {
-    await useEditor.getState().openFile('a.mp4')
+    await openReady('a.mp4')
     await useEditor.getState().saveProject('edit.snipjoin')
     await useEditor.getState().closeFile()
     await useEditor.getState().openProject('edit.snipjoin')
@@ -136,5 +160,48 @@ describe('opening a project that was saved', () => {
     useEditor.getState().seek(10)
     useEditor.getState().splitAtPlayhead()
     expect(await useEditor.getState().saveProject()).toBe(true)
+  })
+})
+
+describe('opening a project whose files have moved', () => {
+  beforeEach(async () => {
+    written.clear()
+    gone.clear()
+    await useEditor.getState().closeFile()
+  })
+
+  /**
+   * The ordinary shape of a broken project: one video, and it moved. Refusing
+   * to open it left an error about a path and nothing to repair. Now the edit
+   * opens with its blocks kept, the pool names the file that is gone, and
+   * saying where it went brings the picture back.
+   */
+  it('opens with every file missing rather than refusing', async () => {
+    await openReady('a.mp4')
+    useEditor.getState().seek(20)
+    useEditor.getState().splitAtPlayhead()
+    expect(await useEditor.getState().saveProject('moved.snipjoin')).toBe(true)
+    await useEditor.getState().closeFile()
+
+    gone.add('a.mp4')
+    await useEditor.getState().openProject('moved.snipjoin')
+
+    const state = useEditor.getState()
+    expect(state.phase).toBe('ready')
+    expect(state.source).toBeNull()
+    expect(state.missingMedia).toEqual(['a.mp4'])
+    expect(state.history.present.blocks).toHaveLength(2)
+    expect(selectCanExport(state)).toBe(false)
+
+    gone.clear()
+    await useEditor.getState().locateMedium('a.mp4', 'a.mp4')
+    await settle()
+
+    const repaired = useEditor.getState()
+    expect(repaired.source?.path).toBe('a.mp4')
+    expect(repaired.missingMedia).toEqual([])
+    expect(repaired.history.present.blocks).toHaveLength(2)
+    expect(selectCanExport(repaired)).toBe(true)
+    expect(selectPreviewUrl(repaired)).toBe('asset://a.mp4.preview')
   })
 })

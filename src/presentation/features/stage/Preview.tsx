@@ -1,14 +1,24 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+} from 'react'
 
 import { aspectRatio } from '@domain/media'
+import { clamp } from '@domain/time'
 import { sourceAt } from '@domain/timeline'
 import { Hole } from '@presentation/components/Icons'
-import { ProgressBar } from '@presentation/components/primitives'
+import { cx, ProgressBar } from '@presentation/components/primitives'
 import { usePlayback } from '@presentation/hooks/usePlayback'
 import { useT } from '@presentation/i18n/I18nProvider'
 import {
   selectActiveMedia,
+  selectDuration,
   selectIsProxy,
   selectPreviewUrl,
   selectTimeline,
@@ -49,6 +59,7 @@ export function Preview() {
     return aspectRatio((showing ?? source)?.video ?? null)
   }, [activeMedia, media, source])
   const preparing = phase === 'preparing'
+  const togglePlay = useEditor((state) => state.togglePlay)
 
   const area = useRef<HTMLDivElement>(null)
   const size = useFittedSize(area, ratio)
@@ -57,7 +68,14 @@ export function Preview() {
     <div className="flex min-h-0 flex-1 p-6">
       <div ref={area} className="relative min-h-0 min-w-0 flex-1">
         <div
-          className="absolute left-1/2 top-1/2 overflow-hidden rounded-xl border border-line bg-ink-deep shadow-[var(--shadow-stage)]"
+          // The picture is a player as well as a monitor: a click on it plays
+          // or pauses, and the bar along its bottom edge walks through the
+          // edit. Both move the same playhead the timeline shows, so there is
+          // never a second position to disagree with the first.
+          onClick={() => {
+            if (!preparing && previewUrl) togglePlay()
+          }}
+          className="group/stage absolute left-1/2 top-1/2 overflow-hidden rounded-xl border border-line bg-ink-deep shadow-[var(--shadow-stage)]"
           style={{
             width: size?.width ?? 0,
             height: size?.height ?? 0,
@@ -81,6 +99,8 @@ export function Preview() {
           )}
 
           <GapCurtain label={t('preview.hole')} note={t('preview.holeNote')} />
+
+          {!preparing && previewUrl && <ScrubBar />}
 
           {isProxy && !preparing && (
             <span
@@ -168,6 +188,95 @@ function useFittedSize(
   // Floored so the frame's border is never the half pixel that overflows the
   // area and puts a scrollbar on the stage.
   return { width: Math.floor(width), height: Math.floor(height) }
+}
+
+/**
+ * The strip along the bottom of the picture that walks through the edit.
+ *
+ * Faint until the pointer is over the picture, like the bar of any player.
+ * Pressing anywhere on it puts the playhead there, and dragging keeps it under
+ * the pointer; the timeline below follows, because this moves the one clock
+ * everything reads. Its own component, subscribed to the playhead, so the
+ * sixty-hertz position re-renders a bar and not the stage.
+ *
+ * Paper, not orange: orange means cutting, and this cuts nothing.
+ */
+function ScrubBar() {
+  const t = useT()
+  const playhead = useEditor((state) => state.playhead)
+  const duration = useEditor(selectDuration)
+  const seek = useEditor((state) => state.seek)
+  const track = useRef<HTMLDivElement>(null)
+
+  const apply = useCallback(
+    (clientX: number) => {
+      const node = track.current
+      if (!node || duration <= 0) return
+      const box = node.getBoundingClientRect()
+      if (box.width <= 0) return
+      seek(clamp((clientX - box.left) / box.width, 0, 1) * duration)
+    },
+    [duration, seek],
+  )
+
+  const onPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return
+      // The picture behind would take this as a click and pause; the bar
+      // means a position, not a toggle.
+      event.stopPropagation()
+      event.preventDefault()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      apply(event.clientX)
+    },
+    [apply],
+  )
+
+  const onPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
+      apply(event.clientX)
+    },
+    [apply],
+  )
+
+  const fraction = duration > 0 ? clamp(playhead / duration, 0, 1) : 0
+
+  return (
+    <div
+      onClick={(event) => event.stopPropagation()}
+      className={cx(
+        'absolute inset-x-0 bottom-0 z-20 flex items-end px-3 pb-2.5 pt-6',
+        'bg-gradient-to-t from-ink-deep/70 to-transparent',
+        'opacity-0 transition-opacity duration-200 group-hover/stage:opacity-100 focus-within:opacity-100',
+      )}
+    >
+      <div
+        ref={track}
+        role="slider"
+        aria-label={t('preview.scrub')}
+        aria-valuemin={0}
+        aria-valuemax={duration}
+        aria-valuenow={playhead}
+        tabIndex={0}
+        title={t('preview.scrub')}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        className="group/bar relative h-4 w-full cursor-pointer touch-none"
+      >
+        <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-paper/25 transition-[height] duration-150 group-hover/bar:h-1.5">
+          <div
+            className="absolute inset-y-0 left-0 rounded-full bg-paper"
+            style={{ width: `${fraction * 100}%` }}
+          />
+        </div>
+        <div
+          className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-paper shadow-[0_1px_4px_rgba(0,0,0,0.6)] transition-transform duration-150 group-hover/bar:scale-110"
+          style={{ left: `${fraction * 100}%` }}
+        />
+      </div>
+    </div>
+  )
 }
 
 /**

@@ -1,12 +1,27 @@
 import { motion } from 'motion/react'
 
-import { duration as spanDuration } from '@domain/time'
-import { Hole, Join, MarkEnd, MarkStart, Scissors } from '@presentation/components/Icons'
+import { duration as spanDuration, formatTimecode } from '@domain/time'
+import { Scissors } from '@presentation/components/Icons'
 import { Button, cx, Switch } from '@presentation/components/primitives'
 import { useT } from '@presentation/i18n/I18nProvider'
-import { selectSelectionCovers, selectTimeline, useEditor } from '@presentation/state/editorStore'
-import { formatTimecode } from '@domain/time'
+import {
+  selectLocked,
+  selectSelectionCovers,
+  selectTimeline,
+  useEditor,
+} from '@presentation/state/editorStore'
 
+import { InspectorPanel } from './InspectorPanel'
+
+/**
+ * What the rails have marked, and the two things that can be done with it.
+ *
+ * Deliberately terse. This panel once explained itself in three paragraphs,
+ * and the explanations were what people had to scroll past to reach the
+ * buttons. Everything it used to say is still there as a tooltip on the
+ * control it was about. The two marks — start here, end here — live on the
+ * timeline's own toolbar now, beside the playhead they act on.
+ */
 export function SelectionPanel() {
   const t = useT()
 
@@ -17,143 +32,98 @@ export function SelectionPanel() {
   // edit that changes not one frame of the result.
   const covers = useEditor(selectSelectionCovers)
   const timeline = useEditor(selectTimeline)
+  const locked = useEditor(selectLocked)
   const setMode = useEditor((state) => state.setMode)
   const removeSelection = useEditor((state) => state.removeSelection)
   const liftSelection = useEditor((state) => state.liftSelection)
   const setSelection = useEditor((state) => state.setSelection)
-  const markIn = useEditor((state) => state.markIn)
-  const markOut = useEditor((state) => state.markOut)
 
   const joining = timeline.mode === 'join'
 
   return (
-    <section className="panel flex shrink-0 flex-col gap-4 p-4">
-      <header className="flex items-center justify-between">
-        <h2 className="eyebrow">{t('selection.title')}</h2>
-        {selection && (
+    <InspectorPanel
+      id="selection"
+      title={t('selection.title')}
+      aside={
+        selection && (
           <button
             type="button"
             onClick={() => setSelection(null)}
             title={t('hint.clearSelection')}
-            className="text-[11px] text-faint transition-colors duration-150 hover:text-paper"
+            className="shrink-0 px-1 text-[11px] text-faint transition-colors duration-150 hover:text-paper"
           >
             {t('selection.clear')}
           </button>
+        )
+      }
+    >
+      <div className="flex flex-col gap-3 px-3 pb-3">
+        {/* Nothing stands in for an empty selection. The panel used to carry a
+            sentence telling you to drag across the timeline, which is the one
+            thing anybody works out on their own, and it was in the way every
+            time afterwards. */}
+        {selection && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18 }}
+            className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-line bg-line"
+          >
+            <Readout label={t('selection.in')} value={formatTimecode(selection.start)} accent />
+            <Readout label={t('selection.out')} value={formatTimecode(selection.end)} accent />
+            <Readout label={t('selection.length')} value={formatTimecode(spanDuration(selection))} />
+          </motion.div>
         )}
-      </header>
 
-      {selection ? (
-        <motion.div
-          initial={{ opacity: 0, y: -4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.18 }}
-          className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-line bg-line"
+        {selection && !covers && (
+          <p className="px-0.5 text-[11px] leading-snug text-faint">{t('selection.onlyHole')}</p>
+        )}
+
+        {/* The join switch, directly above the two actions it changes the
+            meaning of. What each setting does to the file is the tooltip. */}
+        <div
+          className="rounded-lg border border-line bg-ink/40 px-3 py-2"
+          title={joining ? t('join.on') : t('join.off')}
         >
-          <Readout label={t('selection.in')} value={formatTimecode(selection.start)} accent />
-          <Readout label={t('selection.out')} value={formatTimecode(selection.end)} accent />
-          <Readout label={t('selection.length')} value={formatTimecode(spanDuration(selection))} />
-        </motion.div>
-      ) : (
-        <div className="rounded-lg border border-dashed border-line bg-ink/40 px-3 py-4 text-center">
-          <p className="text-[12px] leading-snug text-muted">{t('selection.empty')}</p>
-          <p className="mt-1.5 text-[11px] text-faint">{t('selection.emptyHint')}</p>
+          <Switch
+            checked={joining}
+            onChange={(checked) => setMode(checked ? 'join' : 'gap')}
+            label={t('join.label')}
+            disabled={locked}
+          />
         </div>
-      )}
 
-      {selection && !covers && (
-        <p className="-mt-2 px-0.5 text-[11px] leading-snug text-faint">
-          {t('selection.onlyHole')}
-        </p>
-      )}
+        {/* One under the other, both the full width of the panel. Side by side
+            the second one had whatever room the first left it, which in
+            Portuguese was not enough for its own label — it arrived cut off,
+            and a button nobody can read is a button nobody presses. The word
+            is short now and the sentence explaining it is the tooltip. */}
+        <div className="space-y-2">
+          <Button
+            tone="snip"
+            size="md"
+            full
+            disabled={!covers || locked}
+            onClick={removeSelection}
+            title={t('hint.remove')}
+            icon={<Scissors size={15} />}
+          >
+            {t('selection.remove')}
+          </Button>
 
-      {/*
-        Always here, never only while nothing is marked.
-
-        Marking the start creates a selection, which used to hide these two —
-        so the only way back to "mark the end here" was to click the timeline to
-        move the playhead, and that cleared the start you had just set. The
-        buttons going away were half of that; the timeline click was the other
-        half, and it now keeps a selection it lands inside.
-      */}
-      {/*
-        Drawn as buttons, because that is what they are. As quiet text they read
-        as a caption to the panel above them — two labels somebody had left
-        lying there — and the pair that sets a selection from the keyboard's
-        side is not something to have to guess is clickable.
-      */}
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          tone="neutral"
-          full
-          icon={<MarkStart size={14} />}
-          title={t('hint.markIn')}
-          onClick={markIn}
-        >
-          {t('selection.setIn')}
-        </Button>
-        <Button
-          size="sm"
-          tone="neutral"
-          full
-          icon={<MarkEnd size={14} />}
-          title={t('hint.markOut')}
-          onClick={markOut}
-        >
-          {t('selection.setOut')}
-        </Button>
-      </div>
-
-      {/*
-        The join switch. It sits directly above the two actions it changes the
-        meaning of, and its description swaps with its state, because the two
-        settings produce genuinely different files.
-      */}
-      <div className="rounded-lg border border-line bg-ink/40 p-3">
-        <Switch
-          checked={joining}
-          onChange={(checked) => setMode(checked ? 'join' : 'gap')}
-          label={t('join.label')}
-          description={joining ? t('join.on') : t('join.off')}
-        />
-
-        <div className="mt-3 flex items-center gap-2 border-t border-line pt-3 text-[11px] text-faint">
-          {joining ? (
-            <Join size={14} className="shrink-0 text-dusk-lift" />
-          ) : (
-            <Hole size={14} className="shrink-0 text-dusk-lift" />
-          )}
-          <span>{joining ? t('blocks.reorderHint') : t('blocks.moveHint')}</span>
+          <Button
+            tone="neutral"
+            size="md"
+            full
+            disabled={!covers || locked}
+            title={t('selection.liftHint')}
+            onClick={liftSelection}
+          >
+            {t('selection.lift')}
+          </Button>
         </div>
       </div>
-
-      <div className="space-y-2">
-        <Button
-          tone="snip"
-          size="md"
-          full
-          disabled={!covers}
-          onClick={removeSelection}
-          title={t('hint.remove')}
-          icon={<Scissors size={15} />}
-        >
-          {t('selection.remove')}
-        </Button>
-
-        <Button
-          tone="neutral"
-          size="md"
-          full
-          disabled={!covers}
-          title={t('selection.liftHint')}
-          onClick={liftSelection}
-        >
-          {t('selection.lift')}
-        </Button>
-
-        <p className="px-0.5 text-[11px] leading-snug text-faint">{t('selection.liftHint')}</p>
-      </div>
-    </section>
+    </InspectorPanel>
   )
 }
 

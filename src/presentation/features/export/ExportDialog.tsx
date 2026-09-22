@@ -15,8 +15,14 @@ import {
   type UpscaleAlgorithm,
   type VideoCodec,
 } from '@domain/export'
-import { losslessAccuracy } from '@domain/lossless'
-import { displaySize, formatBytes, pixelCount, sourceExtension } from '@domain/media'
+import { losslessAccuracy, ON_KEYFRAME, smartCutReport, type SmartCutReport } from '@domain/lossless'
+import {
+  displaySize,
+  formatBytes,
+  pixelCount,
+  sourceExtension,
+  supportsSmartCut,
+} from '@domain/media'
 import { formatDuration, formatTimecode } from '@domain/time'
 import { isContiguous, spansMultipleMedia } from '@domain/timeline'
 import { Check, Close, Export as ExportIcon, Folder, Sparkle } from '@presentation/components/Icons'
@@ -67,8 +73,28 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
         state.history.present.blocks.some((block) => block.mediaId === medium.path),
     ),
   )
-  const copyImpossible = hasGaps || spansMedia || usesStill
-  const copyPossible = canCopyStreams(spec, hasGaps, spansMedia, usesStill)
+  // Whether a copy can re-encode only the frames beside each cut, which is
+  // what makes it exact and what lets it draw a hole: the file has to allow it,
+  // and its cut points have to have been read.
+  const smartCut = useEditor((state) => {
+    const medium = state.source
+    if (!medium || !supportsSmartCut(medium)) return false
+    if (state.keyframesTruncated[medium.path]) return false
+    return (state.keyframes[medium.path]?.length ?? 0) > 0
+  })
+  const copyImpossible = spansMedia || usesStill || (hasGaps && !smartCut)
+  const copyPossible = canCopyStreams(spec, hasGaps, spansMedia, usesStill, smartCut)
+
+  // How much a copy has to re-encode, for the estimate and the note under the
+  // mode. In a memo rather than a selector: the result is a fresh object.
+  const blocks = timeline.blocks
+  const keyframes = useEditor((state) => state.keyframes[state.source?.path ?? ''])
+  const sourceDuration = source?.duration ?? 0
+  const report = useMemo(
+    () => smartCutReport(blocks, keyframes ?? [], sourceDuration),
+    [blocks, keyframes, sourceDuration],
+  )
+  const reEncoded = spec.mode === 'fast' && smartCut ? report.reEncoded : 0
 
   // Ask the backend where to put the result the first time the dialog opens for
   // a given file, rather than guessing a path in the renderer.
@@ -88,9 +114,10 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
     }
   }, [open, source])
 
-  // A hole cannot be copied, so the mode is corrected as soon as one exists. The
-  // backend enforces this too; doing it here means the dialog never shows a
-  // promise it cannot keep.
+  // Where a copy cannot honour the timeline — a second file, a still, or a
+  // hole in a file whose packets cannot be joined with drawn ones — the mode
+  // is corrected as soon as that is so. The backend enforces this too; doing
+  // it here means the dialog never shows a promise it cannot keep.
   useEffect(() => {
     if (copyImpossible && spec.mode === 'fast') {
       setSpec((current) => ({ ...current, mode: 'precise' }))
@@ -114,8 +141,8 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
   const ratio = (outputSize.width * outputSize.height) / Math.max(1, pixelCount(video))
 
   const estimate = useMemo(
-    () => estimateSeconds(spec, outputDuration, ratio),
-    [spec, outputDuration, ratio],
+    () => estimateSeconds(spec, outputDuration, ratio, reEncoded),
+    [spec, outputDuration, ratio, reEncoded],
   )
 
   const upscalers = capabilities?.upscalers ?? ['none', 'lanczos']
@@ -202,14 +229,14 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
                     </div>
                     {copyImpossible ? (
                       <p className="mt-2 text-[11.5px] leading-snug text-dusk-lift">
-                        {hasGaps
-                          ? t('export.mode.forced')
-                          : spansMedia
-                            ? t('export.mode.forcedByFiles')
-                            : t('export.mode.forcedByStill')}
+                        {spansMedia
+                          ? t('export.mode.forcedByFiles')
+                          : usesStill
+                            ? t('export.mode.forcedByStill')
+                            : t('export.mode.forced')}
                       </p>
                     ) : (
-                      spec.mode === 'fast' && <LosslessNote />
+                      spec.mode === 'fast' && <LosslessNote smartCut={smartCut} report={report} />
                     )}
                   </Field>
 
@@ -462,14 +489,23 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
 const LEVELS: readonly RestorationLevel[] = ['off', 'light', 'medium', 'strong']
 
 /**
- * Tells the truth about where a stream copy will actually cut.
+ * Tells the truth about what a copy will do at the cuts.
  *
- * A copy can only begin on a cut point, so a selection placed between two of
- * them silently drags the result backwards. The editor snaps to them, which makes
- * this line usually read "exact" — and when it does not, saying so beats letting
- * the user discover a second of unwanted footage in the finished file.
+ * For a file whose packets can be joined with re-encoded ones, every cut lands
+ * on its frame and the line says how much footage beside the cuts that costs.
+ * For any other file a copy can only begin on a cut point, so a selection
+ * placed between two of them silently drags the result backwards; the editor
+ * snaps to them, which makes the line usually read "exact", and when it does
+ * not, saying so beats letting the user discover a second of unwanted footage
+ * in the finished file.
  */
-function LosslessNote() {
+function LosslessNote({
+  smartCut,
+  report,
+}: {
+  readonly smartCut: boolean
+  readonly report: SmartCutReport
+}) {
   const t = useT()
   const blocks = useEditor((state) => state.history.present.blocks)
   // Only ever rendered for a copy, which rules out a timeline drawing on more
@@ -504,7 +540,18 @@ function LosslessNote() {
     return <p className="mt-2 text-[11.5px] text-faint">{t('export.lossless.reading')}</p>
   }
 
-  if (accuracy.exact) {
+  if (smartCut && report.reEncoded > ON_KEYFRAME) {
+    return (
+      <p className="mt-2 flex items-center gap-1.5 text-[11.5px] leading-snug text-dusk-lift">
+        <Check size={13} strokeWidth={2.4} className="shrink-0" />
+        {t('export.lossless.partial', {
+          time: formatDuration(Math.max(1, Math.round(report.reEncoded))),
+        })}
+      </p>
+    )
+  }
+
+  if (smartCut || accuracy.exact) {
     return (
       <p className="mt-2 flex items-center gap-1.5 text-[11.5px] text-dusk-lift">
         <Check size={13} strokeWidth={2.4} />

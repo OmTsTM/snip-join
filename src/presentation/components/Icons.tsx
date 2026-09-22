@@ -398,3 +398,26 @@ export const Palette = (props: IconProps) => (
     <circle cx="15.2" cy="8.6" r="1.1" />
   </Icon>
 )
+
+/** Points down; turned on its side it says "closed". */
+export const Chevron = (props: IconProps) => (
+  <Icon {...props}>
+    <path d="M6 9.5l6 6 6-6" />
+  </Icon>
+)
+
+/** The side column and its panels: which of them are on show. */
+export const Panels = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+    <path d="M14.5 4.5v15M14.5 10h6M14.5 14.5h6" />
+  </Icon>
+)
+
+/** A strip of film: a picture that has not arrived yet. */
+export const Film = (props: IconProps) => (
+  <Icon {...props}>
+    <rect x="3.5" y="5" width="17" height="14" rx="2" />
+    <path d="M7 5v14M17 5v14M3.5 9h3.5M3.5 15h3.5M17 9h3.5M17 15h3.5" />
+  </Icon>
+)

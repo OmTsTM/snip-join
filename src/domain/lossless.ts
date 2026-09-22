@@ -107,3 +107,55 @@ export function losslessAccuracy(
 }
 
 export { ON_KEYFRAME }
+
+export interface SmartCutReport {
+  /** Seconds of picture that will be re-encoded, beside the cuts. */
+  readonly reEncoded: number
+  /** How many stretches that is. */
+  readonly pieces: number
+}
+
+/**
+ * What a copy that re-encodes only the frames beside each cut will have to
+ * re-encode.
+ *
+ * A block's copied stretch runs from the first keyframe inside it to the last;
+ * whatever lies before the first and after the last is re-encoded. A block that
+ * begins at the start of the file or runs to its end needs no keyframe on that
+ * side, as with `losslessAccuracy`. An estimate for the dialog rather than the
+ * plan itself: the planner also accounts for the pictures that lead an open
+ * group, which add at most a few frames.
+ */
+export function smartCutReport(
+  blocks: readonly Block[],
+  keyframes: readonly number[],
+  sourceDuration: number,
+): SmartCutReport {
+  let reEncoded = 0
+  let pieces = 0
+  const count = (seconds: number) => {
+    if (seconds <= ON_KEYFRAME) return
+    reEncoded += seconds
+    pieces += 1
+  }
+
+  for (const block of blocks) {
+    const start = Math.max(0, block.source.start)
+    const end = block.source.end
+    const firstIndex = keyframes.findIndex((k) => k >= start - ON_KEYFRAME)
+    const first = firstIndex === -1 ? null : keyframes[firstIndex]!
+    const last = keyframeAtOrBefore(keyframes, end + ON_KEYFRAME)
+
+    // No keyframe inside the block: nothing can be copied, the whole block
+    // goes through the encoder.
+    if (first === null || first >= end - ON_KEYFRAME || last === null || last < first) {
+      count(end - start)
+      continue
+    }
+
+    count(first - start)
+    if (end < sourceDuration - ON_KEYFRAME) count(end - last)
+  }
+
+  return { reEncoded, pieces }
+}

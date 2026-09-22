@@ -66,11 +66,25 @@ where
         let base = completed_weight;
         let mut report = on_progress.clone();
 
-        runner::run_with_progress(&tools.ffmpeg, &step.args, cancel.clone(), move |progress| {
-            let within_step = (progress.out_time / span).clamp(0.0, 1.0);
-            report(((base + within_step * weight) / total_weight).clamp(0.0, 1.0));
-        })
-        .await?;
+        let last =
+            runner::run_with_progress(&tools.ffmpeg, &step.args, cancel.clone(), move |progress| {
+                let within_step = (progress.out_time / span).clamp(0.0, 1.0);
+                report(((base + within_step * weight) / total_weight).clamp(0.0, 1.0));
+            })
+            .await?;
+
+        // A step that ends cleanly having written nothing is a failure FFmpeg
+        // does not report as one: a hardware encoder handed an input too short
+        // to flush answers with an empty stream and exit code zero, and the join
+        // then treats the empty piece as the end of the list, leaving a file
+        // that stops short with no word about it.
+        if last.frame == 0 && last.out_time <= 0.0 {
+            return Err(AppError::EncodeFailed(format!(
+                "step {} of {} finished without writing a single frame",
+                index + 1,
+                plan.steps.len()
+            )));
+        }
 
         completed_weight += weight;
         on_progress((completed_weight / total_weight).clamp(0.0, 1.0));
@@ -97,6 +111,7 @@ where
         on_progress((progress.out_time / span).clamp(0.0, 1.0));
     })
     .await
+    .map(|_| ())
 }
 
 async fn write_list_file(path: &Path, contents: &str) -> AppResult<()> {

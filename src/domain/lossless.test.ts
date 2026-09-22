@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { isOnKeyframe, keyframeAtOrBefore, losslessAccuracy, nearestKeyframe } from './lossless'
+import {
+  isOnKeyframe,
+  keyframeAtOrBefore,
+  losslessAccuracy,
+  nearestKeyframe,
+  smartCutReport,
+} from './lossless'
 import { span } from './time'
 import { createTimeline, nextBlockId, removeSpan, type Block } from './timeline'
 
@@ -84,5 +90,40 @@ describe('judging whether a copy would be faithful', () => {
 
     // 5.5 drifts back to 4 (1.5s) and 31 drifts back to 30 (1s).
     expect(accuracy.worstShift).toBeCloseTo(1.5, 6)
+  })
+})
+
+describe('estimating what a copy re-encodes beside the cuts', () => {
+  it('re-encodes nothing for an untouched video or a cut on keyframes', () => {
+    const untouched = createTimeline('a.mp4', 60)
+    expect(smartCutReport(untouched.blocks, KEYS, 60).reEncoded).toBe(0)
+
+    const snapped = removeSpan(createTimeline('a.mp4', 60), span(10, 20))
+    expect(smartCutReport(snapped.blocks, KEYS, 60)).toEqual({ reEncoded: 0, pieces: 0 })
+  })
+
+  it('counts the frames from a cut to the keyframe on the copied side', () => {
+    // Removing 5s to 11s: the first block ends at 5, one second past the
+    // keyframe at 4; the second starts at 11, one second before the one at 12.
+    const timeline = removeSpan(createTimeline('a.mp4', 60), span(5, 11))
+    const report = smartCutReport(timeline.blocks, KEYS, 60)
+
+    expect(report.reEncoded).toBeCloseTo(2, 6)
+    expect(report.pieces).toBe(2)
+  })
+
+  it('re-encodes a block whole when no keyframe falls inside it', () => {
+    const report = smartCutReport([block(4.5, 5.5)], KEYS, 60)
+    expect(report.reEncoded).toBeCloseTo(1, 6)
+    expect(report.pieces).toBe(1)
+  })
+
+  it('needs no keyframe at the start of the file or at its end', () => {
+    const timeline = removeSpan(createTimeline('a.mp4', 60), span(20, 30))
+    expect(smartCutReport(timeline.blocks, KEYS, 60).reEncoded).toBe(0)
+
+    // The last block ends at 59, which is off a keyframe but not at the end.
+    const trimmed = [block(0, 20), block(30, 59)]
+    expect(smartCutReport(trimmed, KEYS, 60).reEncoded).toBeCloseTo(1, 6)
   })
 })

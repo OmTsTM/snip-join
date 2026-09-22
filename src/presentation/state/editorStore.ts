@@ -675,6 +675,7 @@ export const useEditor = create<EditorState>((set, get) => ({
    * piece is normalised to.
    */
   async removeMedium(mediaId) {
+    if (selectLocked(get())) return
     const { media, history } = get()
     if (media[0]?.path === mediaId) return
 
@@ -833,6 +834,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   removeSelection() {
+    if (selectLocked(get())) return
     const { selection, history } = get()
     if (!selection) return
 
@@ -858,6 +860,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   liftSelection() {
+    if (selectLocked(get())) return
     const { selection, history } = get()
     if (!selection) return
 
@@ -871,6 +874,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   setMode(mode) {
+    if (selectLocked(get())) return
     const { history } = get()
     const next = setModeIn(history.present, mode)
     if (next === history.present) return
@@ -878,6 +882,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   splitAtPlayhead() {
+    if (selectLocked(get())) return
     const { history, playhead } = get()
     const next = splitAt(history.present, playhead)
     if (next === history.present) return
@@ -889,6 +894,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   moveBlock(id, start) {
+    if (selectLocked(get())) return
     const { history } = get()
     const next = moveBlockIn(history.present, id, start)
     if (next === history.present) return
@@ -899,6 +905,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   trimBlock(id, edge, at) {
+    if (selectLocked(get())) return
     const { history, media } = get()
 
     // The block's own medium, not the project's first one. Trimming clamps
@@ -918,6 +925,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   deleteBlock(id) {
+    if (selectLocked(get())) return
     const { history } = get()
     // `settle` rebuilds the list either way, so an identity check would never
     // catch a delete that removed nothing. Asking whether the block is there is
@@ -939,6 +947,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   shiftBlock(id, direction) {
+    if (selectLocked(get())) return
     const { history } = get()
     const next = shiftBlockIn(history.present, id, direction)
     if (next === history.present) return
@@ -946,6 +955,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   reorderBlock(id, toIndex) {
+    if (selectLocked(get())) return
     const { history } = get()
     const next = reorderBlockIn(history.present, id, toIndex)
     if (next === history.present) return
@@ -955,6 +965,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   duplicateBlock(id) {
+    if (selectLocked(get())) return
     const { history } = get()
     const { timeline, inserted } = duplicateBlockIn(history.present, id)
     if (timeline === history.present) return
@@ -968,6 +979,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   cutBlock(id) {
+    if (selectLocked(get())) return
     get().copyBlock(id)
     get().deleteBlock(id)
   },
@@ -979,6 +991,7 @@ export const useEditor = create<EditorState>((set, get) => ({
    * position the user is looking at is the one they mean.
    */
   pasteAtPlayhead() {
+    if (selectLocked(get())) return
     const { clipboard, history, playhead, media } = get()
     if (!clipboard) return
 
@@ -1081,26 +1094,26 @@ export const useEditor = create<EditorState>((set, get) => ({
     }
     if (get().mediaToken !== token) return
 
-    if (opened.length === 0) {
-      set({ phase: 'empty' })
-      get().reportError(new Error('none of the files this project uses could be opened'))
-      return
-    }
-
     // The blocks of a missing medium are kept, not dropped. Dropping them
     // would quietly rewrite the edit to match an accident — a file moved on
     // disk — and leave nothing to repair once the file is found again. They sit
     // there unreadable, the pool says which file is gone, and the export refuses
     // until it is either found or removed on purpose.
+    //
+    // That holds even when *every* file is gone, which is the ordinary case
+    // for a project with one video in it. Refusing to open such a project
+    // used to be the answer, and it left the user with an error about a path
+    // and no way to say where the file went. Now the editor opens with the
+    // blocks in place and nothing to watch, and the pool offers the repair.
     const restored = projectTimeline(project)
     const timeline = withBlocks(restored, restored.blocks)
-    const source = opened[0]!
+    const source = opened[0] ?? null
 
     set({
       media: opened,
       missingMedia: missing,
       source,
-      phase: 'preparing',
+      phase: source ? 'preparing' : 'ready',
       history: createHistory(timeline),
       projectPath: path,
       savedMark: { timeline, media: opened },
@@ -1111,6 +1124,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       .capabilities()
       .then((capabilities) => set({ capabilities }))
       .catch(() => undefined)
+
+    if (!source) return
 
     // Every medium, not only the first. A project is the one place several
     // files arrive at once, and the preview is what the player reads: preparing
@@ -1162,6 +1177,10 @@ export const useEditor = create<EditorState>((set, get) => ({
         media: state.media.some((medium) => medium.path === source.path)
           ? state.media
           : [...state.media, source],
+        // A project that opened with every file missing has had nothing to
+        // watch until now; the first file found becomes what the player and
+        // the export format follow.
+        source: state.source ?? source,
         missingMedia: state.missingMedia.filter((path) => path !== missingPath),
         history: record(state.history, withBlocks(state.history.present, blocks)),
       }
@@ -1173,6 +1192,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   dropMissingMedium(missingPath) {
+    if (selectLocked(get())) return
     set((state) => ({
       missingMedia: state.missingMedia.filter((path) => path !== missingPath),
       history: record(
@@ -1186,6 +1206,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   undo() {
+    if (selectLocked(get())) return
     if (!canUndo(get().history)) return
     const history = undoHistory(get().history)
     set({
@@ -1197,6 +1218,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   redo() {
+    if (selectLocked(get())) return
     if (!canRedo(get().history)) return
     const history = redoHistory(get().history)
     set({
@@ -1416,6 +1438,23 @@ export const selectDirty = (state: EditorState): boolean => {
  */
 export const selectCanExport = (state: EditorState): boolean =>
   state.history.present.blocks.length > 0 && state.missingMedia.length === 0
+
+/**
+ * Whether the timeline may be edited right now.
+ *
+ * Not while a project is being opened, its preview prepared, or its frames
+ * still arriving. The blocks are on screen before the media behind them have
+ * finished being read, and a cut made then is a cut into a file the editor
+ * does not know the whole of yet.
+ *
+ * This is exactly the condition the veil over the block track is drawn for, so
+ * the two cannot disagree: whenever the track says it is still reading, it is
+ * also refusing to be cut, and there is never a moment that looks busy but
+ * quietly accepts an edit. Every action that records one reads this, so the
+ * keyboard cannot reach what the veil keeps the pointer from.
+ */
+export const selectLocked = (state: EditorState): boolean =>
+  state.phase === 'opening' || state.phase === 'preparing' || state.pendingFrames > 0
 
 /** Whether any medium in the project has reported its cut points yet. */
 export const selectHasCutPoints = (state: EditorState): boolean =>
