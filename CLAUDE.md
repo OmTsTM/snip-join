@@ -671,7 +671,7 @@ pnpm app:dev -- -- path/to/video.mp4   # open a file at launch
 pnpm typecheck          # tsc --build, strict, both projects
 pnpm test               # renderer unit tests
 pnpm i18n:check         # placeholder parity across locales, and dead keys
-cd src-tauri && cargo test              # 132 unit + 13 end-to-end
+cd src-tauri && cargo test              # 185 unit + 18 end-to-end
 cd src-tauri && cargo clippy --all-targets
 cd src-tauri && cargo fmt --all         # rustfmt.toml sits at the repo root
 pnpm ffmpeg:fetch       # download the FFmpeg that gets bundled

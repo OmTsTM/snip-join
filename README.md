@@ -44,7 +44,12 @@ precision and finish of a paid tool.
 ## What it does
 
 **Mark and remove.** Drag across the timeline. Two orange rails show exactly what
-goes. Press Remove.
+goes. Press Remove. *Start here* and *End here* on the timeline's own toolbar put
+an edge at the playhead, which is how you mark a stretch while watching it.
+
+**The picture is the player.** Click it to play or pause, and drag the bar along
+its bottom edge to move through the edit. There is one playhead, so the timeline
+below follows and the two can never disagree about where you are.
 
 **Join, or don't.** With *Join the ends* on, what is left closes up into one
 continuous video. Turn it off and the hole stays exactly where it was — it
@@ -93,25 +98,37 @@ along the running order without going near the handle. Right-click for the same
 list, plus *Duplicate*.
 
 **Or reorder them as a list.** *Blocks* on the right is the running order written
-out, and a row can be dragged up or down by its grip to change it — the timeline
-follows. Finding room in a strip is one way to say "play this third"; dropping a
+out, and a row can be dragged up or down anywhere along it to change that — the
+timeline follows. Finding room in a strip is one way to say "play this third"; dropping a
 row between two others is the other, and holes you left on the timeline are kept
 where they are.
 
 You can delete every block. An empty timeline is a fresh start, not a dead end —
 the files stay in *Media*, and dragging one back in starts the edit again.
 
-**Several files.** Add more with the folder button beside *Media*. Clicking a
-file asks whether to put it on the end; dragging it out of the list drops it
-wherever you let go, with a blue marker showing exactly where that is.
+**Several files.** Add more with the folder button beside *Media*. Each row shows
+a frame of the file, so the list reads as footage rather than as filenames.
+Clicking a file asks whether to put it on the end; dragging it out of the list
+drops it wherever you let go, with a blue marker showing exactly where that is.
+
+**Get the panels out of the way.** The strip between the picture and the column
+on the right is a handle: click it and the column slides away, giving the whole
+window to the video. Click it again and it comes back. Each panel also folds to
+its title on its own, or leaves the column entirely and returns from the menu
+beside *Export*. However you leave it is how you find it next time.
 
 **Still images too.** Drop in a PNG or a JPEG and it becomes a block like any
 other — five seconds by default, dragged to any length up to a minute. A
 container claims a still is a fortieth of a second long; the editor ignores that
 and the export draws the frame for as long as you asked.
 
-**Lift out to move.** Turns the marked stretch into its own block without
-deleting anything, so you can drag that moment somewhere else entirely.
+**Lift out.** Turns the marked stretch into its own block without deleting
+anything, so you can drag that moment somewhere else entirely.
+
+**It waits before it lets you cut.** While a file is still being read — the
+preview built, the filmstrip filled — the track says so and takes no edits. A
+cut made against a file the editor has not finished reading is a cut into
+something it does not yet know the whole of.
 
 **Almost any format.** MP4, MOV, MKV, AVI, WMV, FLV, TS, MTS, WebM, ProRes, HEVC,
 10-bit, and the rest. Anything the web view cannot decode gets a lightweight
@@ -133,12 +150,24 @@ you — the most you can lose is the last half minute.
 and their streams are properties of the file today rather than of the day you
 saved. A file that has moved is marked in *Media* with the choice of finding it
 again or dropping it; the blocks that read from it stay where they are until you
-decide, since an edit is not something to rewrite because a file moved.
+decide, since an edit is not something to rewrite because a file moved. That
+holds even when every file it names has moved, which is the ordinary shape of a
+broken project when it only ever had one video: it opens with nothing to watch
+and the edit intact, waiting to be pointed at the footage again. A *project* that
+has moved is the same story on the welcome screen — the row says so and offers to
+find it, instead of an error about a path you can do nothing with.
+
+**Exporting does not ask.** A project with a name is written before the dialog
+opens, quietly. One that has never been saved is simply exported; choosing a name
+and a place for you at the moment you asked for a video is not a rescue.
 
 **Closing puts the editor down, not the application.** The window goes back to
 the front door, with the projects you were last in listed there — closing one
-edit is usually the moment before opening another. Unsaved work is asked about
-first. Close again from there and it really does quit.
+edit is usually the moment before opening another. Close again from there and it
+really does quit.
+
+Unsaved work is asked about before anything that would lose it: closing, starting
+a new project, opening another one, or an update replacing the application.
 
 ## Cutting without re-encoding
 
@@ -299,8 +328,8 @@ know nothing about FFmpeg and FFmpeg knows nothing about the window. The whole
 export routing decision is a pure function returning a list of commands, which is
 why it can be tested without encoding anything.
 
-Covered by 132 Rust unit tests, 13 end-to-end tests that drive real FFmpeg and
-assert on the resulting files, and 120 renderer tests. See
+Covered by 185 Rust unit tests, 18 end-to-end tests that drive real FFmpeg and
+assert on the resulting files, and 148 renderer tests. See
 [CLAUDE.md](CLAUDE.md) for the architecture and the traps.
 
 The interface takes its palette straight from the logo: `#F9811E` is the
