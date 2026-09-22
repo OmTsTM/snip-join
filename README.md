@@ -1,11 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="Snip Join" width="100%">
-</p>
-
-<h1 align="center">Snip Join</h1>
-
-<p align="center">
-  <strong>Cut a stretch out of any video in seconds. No decoding, no encoding, no waiting.</strong>
+  <img src="docs/banner.png" alt="Snip Join — cut a stretch out of any video in seconds. No decoding, no encoding, no waiting." width="100%">
 </p>
 
 <p align="center">
