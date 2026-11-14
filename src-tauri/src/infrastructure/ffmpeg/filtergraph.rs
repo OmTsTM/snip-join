@@ -629,6 +629,7 @@ mod tests {
             }),
             audio: None,
             playability: Playability::NeedsProxy,
+            idr_keyframes: true,
         };
 
         assert_eq!(pixel_format_for(&deep, VideoCodec::Hevc), "yuv420p10le");

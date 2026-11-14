@@ -742,6 +742,7 @@ mod tests {
                 bit_rate: Some(160_000),
             }),
             playability: Playability::Native,
+            idr_keyframes: true,
         }
     }
 

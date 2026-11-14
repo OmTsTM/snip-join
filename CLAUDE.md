@@ -170,7 +170,8 @@ The `Copy` export mode is a pure stream copy: no decoding, no encoding, no
 processor or graphics work. It is the default and the reason the app is usable on
 a weak machine.
 
-A copy can only begin on a keyframe, so the honest version of that feature needs
+A copy can only begin on a keyframe — and only on one of the right kind, which
+is its own trap and is covered below. The honest version of that feature needs
 three things, all of which exist:
 
 - `infrastructure/ffmpeg/keyframes.rs` lists them by reading **packets**, not
@@ -205,6 +206,22 @@ one freshly encoded sound track. A snapped edit has no re-encoded pieces, and
 then the plain copy runs with the sound copied too. The rules that make this
 work, each of which was found by breaking it:
 
+- **A keyframe is not always a place a copy may begin.** `ffprobe` flags a
+  packet as a keyframe for any picture a seek can land on, which for H.264
+  includes a plain I-frame and not only an IDR. Only an IDR resets the
+  reference lists and carries its parameter sets, so a piece started on a
+  plain one is decoded against pictures the file no longer holds: grey frames
+  with a band of rubble across the top, several times over a video. Open-GOP
+  and intra-refresh recordings are full of them, and the leading-picture rule
+  below does *not* catch the intra-refresh kind — nothing is displayed out of
+  order, so there is nothing to count. `keyframes_are_idr` asks the file
+  directly, once, by reading a single packet from the middle of it and looking
+  at the NAL type; the answer rides on `MediaSource::idr_keyframes` and gates
+  both `supports_smart_cut` and the plain copy. Such a file is copied only
+  when the whole edit is one clip taken from its very first frame, which is
+  always an IDR. Injecting the parameter sets with `dump_extra` is *not* a fix:
+  it was tried, and 120 of 150 frames stayed wrong because the references were
+  the other half of the problem.
 - **Pieces go through MPEG-TS, never the destination container.** A copied
   stretch and a re-encoded one share no SPS/PPS, and MP4 keeps one header per
   track: the second piece decodes with the first piece's header and comes out

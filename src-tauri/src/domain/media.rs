@@ -118,6 +118,13 @@ pub struct MediaSource {
     pub video: Option<VideoStream>,
     pub audio: Option<AudioStream>,
     pub playability: Playability,
+    /// Whether a stream copy may begin at any of this file's keyframes.
+    ///
+    /// False for an open-GOP or intra-refresh recording, where the prober
+    /// flags plain I-frames as keyframes and a copy started on one decodes
+    /// against pictures the piece does not carry.
+    #[serde(default)]
+    pub idr_keyframes: bool,
 }
 
 impl MediaSource {
@@ -148,6 +155,11 @@ impl MediaSource {
         let Some(video) = self.video.as_ref() else {
             return false;
         };
+        // A piece is copied from a keyframe, so the keyframes have to be the
+        // kind a copy may begin at.
+        if !self.idr_keyframes {
+            return false;
+        }
         let codec_ok = matches!(video.codec.as_str(), "h264" | "hevc");
         let container_ok =
             self.container.split(',').map(str::trim).any(|name| INDEXED_CONTAINERS.contains(&name));

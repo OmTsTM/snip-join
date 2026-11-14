@@ -113,6 +113,7 @@ pub fn plan(
     // hole is drawn as one more piece and the footage around it is copied.
     let must_re_encode = edit.spans_multiple_media()
         || media.iter().any(MediaSource::is_still)
+        || !copy_may_begin_where_the_clips_do(edit, source)
         || (!edit.is_contiguous() && !smart);
     let spec = spec.clone().reconciled(must_re_encode);
     let output_duration = edit.duration();
@@ -146,6 +147,26 @@ pub fn plan(
     }
 
     copy_plan(source, edit, index, &spec, output, &temp_dir, output_duration)
+}
+
+/// Whether every piece this edit would copy can begin on an IDR.
+///
+/// A copy resumes decoding from nothing, so the picture it starts on has to be
+/// one that carries its own parameter sets and resets the reference lists. The
+/// prober flags a plain I-frame as a keyframe too, and a piece started on one
+/// comes out as grey frames with rubble across the top — which is what an
+/// open-GOP or intra-refresh recording did, on this path and on the plain copy
+/// before it.
+///
+/// The first frame of a file is always such a picture, so a single clip taken
+/// from the very beginning is still copied however the rest of the file was
+/// encoded. Everything else waits for a file whose keyframes are all IDRs.
+fn copy_may_begin_where_the_clips_do(edit: &EditList, source: &MediaSource) -> bool {
+    if source.idr_keyframes {
+        return true;
+    }
+    let clips = edit.clips();
+    clips.len() == 1 && clips[0].source.start().seconds() <= 1e-6
 }
 
 /// A pure stream copy: one piece straight to the destination, or several
@@ -579,6 +600,7 @@ mod tests {
                 bit_rate: Some(160_000),
             }),
             playability: Playability::Native,
+            idr_keyframes: true,
         }
     }
 
@@ -989,5 +1011,46 @@ mod tests {
         let join = plan.steps.last().unwrap();
         assert_eq!(pair(&join.args, "-display_rotation").unwrap(), "-90");
         assert!(plan.steps[0].args.contains(&"-noautorotate".to_string()), "pixels stay as stored");
+    }
+
+    /// The defect a user reported: Copy produced grey frames with a band of
+    /// rubble across the top, several times over a single video.
+    ///
+    /// The prober calls the start of every group a keyframe, but only some of
+    /// those are pictures a decoder can be entered at. A file whose groups
+    /// start on plain I-frames is re-encoded rather than copied into rubble.
+    #[test]
+    fn a_recording_whose_cut_points_are_not_entry_points_is_never_copied() {
+        let source = MediaSource { idr_keyframes: false, ..source() };
+        let edit = EditList::contiguous(vec![TimeRange::from_seconds(4.5, 20.0).unwrap()]).unwrap();
+
+        let plan = plan_with(&source, &edit, ExportSpec::fast(), &[Some(index())]);
+
+        assert_eq!(plan.effective_mode, ExportMode::Precise);
+        assert_eq!(plan.re_encoded, plan.output_duration);
+        assert!(!source.supports_smart_cut());
+    }
+
+    /// The first frame of any file is a picture a decoder can be entered at,
+    /// so trimming the tail off such a recording is still a copy. It is the
+    /// common case, and refusing it would cost minutes for nothing.
+    #[test]
+    fn such_a_recording_is_still_copied_from_its_very_start() {
+        let source = MediaSource { idr_keyframes: false, ..source() };
+        let edit = EditList::contiguous(vec![TimeRange::from_seconds(0.0, 20.0).unwrap()]).unwrap();
+
+        let plan = plan_with(&source, &edit, ExportSpec::fast(), &[Some(index())]);
+
+        assert_eq!(plan.effective_mode, ExportMode::Fast);
+        assert_eq!(plan.re_encoded, 0.0);
+    }
+
+    /// Two pieces need two entry points, and such a file has only the one.
+    #[test]
+    fn a_second_piece_of_such_a_recording_gives_the_copy_up() {
+        let source = MediaSource { idr_keyframes: false, ..source() };
+        let plan = plan_with(&source, &joined(), ExportSpec::fast(), &[Some(index())]);
+
+        assert_eq!(plan.effective_mode, ExportMode::Precise);
     }
 }

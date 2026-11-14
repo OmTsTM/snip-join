@@ -56,6 +56,14 @@ export interface MediaSourceInfo {
   readonly video: VideoStreamInfo | null
   readonly audio: AudioStreamInfo | null
   readonly playability: 'native' | 'needsProxy'
+  /**
+   * Whether a stream copy may begin at any of this file's cut points.
+   *
+   * False for an open-GOP or intra-refresh recording, where the cut points are
+   * plain I-frames: a copy started on one is decoded against pictures it does
+   * not carry, and comes out as grey frames with rubble across the top.
+   */
+  readonly idrKeyframes: boolean
 }
 
 export interface Capabilities {

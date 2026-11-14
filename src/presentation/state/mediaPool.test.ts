@@ -52,6 +52,7 @@ function info(path: string, duration: number): MediaSourceInfo {
       bitRate: null,
     },
     playability: 'native',
+    idrKeyframes: true,
   }
 }
 

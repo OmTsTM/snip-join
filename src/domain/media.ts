@@ -61,6 +61,9 @@ const INDEXED_CONTAINERS = ['mp4', 'mov', 'm4v', '3gp', 'matroska', 'webm']
  */
 export function supportsSmartCut(source: MediaSourceInfo): boolean {
   if (source.kind === 'still' || !source.video) return false
+  // Every piece is copied from a cut point, so the cut points have to be the
+  // kind a copy may begin at.
+  if (!source.idrKeyframes) return false
   const codecOk = source.video.codec === 'h264' || source.video.codec === 'hevc'
   const containerOk = source.container
     .split(',')

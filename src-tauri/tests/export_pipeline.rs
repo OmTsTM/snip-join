@@ -176,6 +176,25 @@ async fn still_fixture() -> PathBuf {
     path
 }
 
+/// Inspects a file the way the application does when it opens one.
+///
+/// `probe` alone leaves `idr_keyframes` false, because settling it costs a
+/// second process and probing stays one call; `media_library::open` is what
+/// asks. A test that skips that question exercises a source the editor never
+/// builds, and would have every copy refused for the wrong reason.
+async fn opened(path: &Path) -> MediaSource {
+    let mut source = probe::probe(path).await.expect("the file must probe");
+    source.idr_keyframes = match source.video.as_ref() {
+        Some(video) if !source.is_still() => {
+            keyframes::keyframes_are_idr(path, &video.codec, source.duration.seconds())
+                .await
+                .unwrap_or(false)
+        }
+        _ => false,
+    };
+    source
+}
+
 /// Container duration of a produced file, in seconds.
 async fn duration_of(path: &Path) -> f64 {
     let tools = locator::tools().unwrap();
@@ -276,7 +295,7 @@ fn dominant(colour: (u8, u8, u8)) -> &'static str {
 
 async fn probe_fixture() -> MediaSource {
     let path = fixture().await;
-    probe::probe(&path).await.expect("the fixture must probe")
+    opened(&path).await
 }
 
 /// Plans and runs an export, returning the destination.
@@ -821,9 +840,8 @@ async fn a_copy_reports_where_it_will_really_start() {
 /// result has to contain both, in order, at the right lengths.
 #[tokio::test]
 async fn a_timeline_drawing_on_two_files_exports_both_of_them() {
-    let first = probe::probe(&fixture().await).await.expect("the first fixture must probe");
-    let second =
-        probe::probe(&second_fixture().await).await.expect("the second fixture must probe");
+    let first = opened(&fixture().await).await;
+    let second = opened(&second_fixture().await).await;
 
     // Four seconds of the first file's red band, then four of the second's
     // yellow one.
@@ -858,9 +876,8 @@ async fn a_timeline_drawing_on_two_files_exports_both_of_them() {
 /// file containing only the first one.
 #[tokio::test]
 async fn asking_to_copy_a_two_file_timeline_re_encodes_instead() {
-    let first = probe::probe(&fixture().await).await.expect("the first fixture must probe");
-    let second =
-        probe::probe(&second_fixture().await).await.expect("the second fixture must probe");
+    let first = opened(&fixture().await).await;
+    let second = opened(&second_fixture().await).await;
 
     let edit = EditList::new(vec![
         Clip::new(0, TimeRange::from_seconds(0.0, 4.0).unwrap(), Instant::ZERO),
@@ -894,7 +911,7 @@ async fn asking_to_copy_a_two_file_timeline_re_encodes_instead() {
 /// block two pixels wide because a PNG reports a fortieth of a second.
 #[tokio::test]
 async fn a_still_exports_for_as_long_as_its_block_asks() {
-    let still = probe::probe(&still_fixture().await).await.expect("the still must probe");
+    let still = opened(&still_fixture().await).await;
     assert!(still.is_still(), "a PNG is a single frame, whatever its container reports");
     assert_eq!(still.duration.seconds(), 5.0, "and the editor gives it an editable length");
 
@@ -925,8 +942,8 @@ async fn a_still_exports_for_as_long_as_its_block_asks() {
 /// size and rate, which is what `concat` silently corrupts without.
 #[tokio::test]
 async fn a_still_can_sit_on_a_timeline_beside_a_video() {
-    let video = probe::probe(&fixture().await).await.expect("the fixture must probe");
-    let still = probe::probe(&still_fixture().await).await.expect("the still must probe");
+    let video = opened(&fixture().await).await;
+    let still = opened(&still_fixture().await).await;
 
     // Three seconds of the card, then three of the video's blue band.
     let edit = EditList::new(vec![
@@ -953,7 +970,7 @@ async fn a_still_can_sit_on_a_timeline_beside_a_video() {
 /// card that lasts a single frame in the finished file.
 #[tokio::test]
 async fn asking_to_copy_a_still_re_encodes_instead() {
-    let still = probe::probe(&still_fixture().await).await.expect("the still must probe");
+    let still = opened(&still_fixture().await).await;
 
     let edit = EditList::new(vec![Clip::new(
         0,
@@ -990,7 +1007,7 @@ async fn asking_to_copy_a_still_re_encodes_instead() {
 #[tokio::test]
 async fn a_cut_between_keyframes_lands_on_the_frame_and_copies_the_rest() {
     let path = bframes_fixture().await;
-    let source = probe::probe(&path).await.expect("the B-frame fixture must probe");
+    let source = opened(&path).await;
 
     let edit = EditList::contiguous(vec![
         TimeRange::from_seconds(4.5, 10.0).unwrap(),
@@ -1031,7 +1048,7 @@ async fn a_cut_between_keyframes_lands_on_the_frame_and_copies_the_rest() {
 #[tokio::test]
 async fn a_hole_between_copied_pieces_is_black_and_the_footage_is_untouched() {
     let path = bframes_fixture().await;
-    let source = probe::probe(&path).await.expect("the B-frame fixture must probe");
+    let source = opened(&path).await;
 
     let edit = EditList::new(vec![
         Clip::new(0, TimeRange::from_seconds(0.0, 10.0).unwrap(), Instant::ZERO),
@@ -1067,7 +1084,7 @@ async fn a_hole_between_copied_pieces_is_black_and_the_footage_is_untouched() {
 #[tokio::test]
 async fn an_open_gop_hevc_source_is_cut_cleanly() {
     let path = open_gop_fixture().await;
-    let source = probe::probe(&path).await.expect("the open-GOP fixture must probe");
+    let source = opened(&path).await;
     let index = keyframes::probe(&path).await.expect("keyframes");
     assert!(
         index.entries.iter().skip(1).any(|k| k.leading > 0),
@@ -1107,7 +1124,7 @@ async fn an_open_gop_hevc_source_is_cut_cleanly() {
 #[tokio::test]
 async fn a_rotated_source_keeps_its_rotation_through_a_copy() {
     let path = rotated_fixture().await;
-    let source = probe::probe(&path).await.expect("the rotated fixture must probe");
+    let source = opened(&path).await;
     assert_eq!(source.video.as_ref().unwrap().rotation, 90, "the fixture is rotated");
 
     let edit = EditList::contiguous(vec![TimeRange::from_seconds(4.5, 10.0).unwrap()]).unwrap();
@@ -1132,7 +1149,7 @@ async fn a_rotated_source_keeps_its_rotation_through_a_copy() {
 #[tokio::test]
 async fn a_snapped_copy_shows_no_frame_twice_at_the_seam() {
     let path = bframes_fixture().await;
-    let source = probe::probe(&path).await.expect("the B-frame fixture must probe");
+    let source = opened(&path).await;
     let index = keyframes::probe(&path).await.expect("keyframes");
 
     // Two keyframes with red on one side and green on the other.
@@ -1160,4 +1177,233 @@ async fn a_snapped_copy_shows_no_frame_twice_at_the_seam() {
     let expected = ((before.at + (30.0 - after.at)) * 30.0).round() as u64;
     assert_eq!(frames_of(&output).await, expected);
     assert_eq!(decode_errors(&output), "");
+}
+
+/// Twelve seconds of detailed, moving pictures whose groups start on plain
+/// I-frames rather than on IDRs, with nothing to give that away.
+///
+/// Intra refresh is what streaming and screen-recording encoders write, and it
+/// is the shape of the defect that got past every guard here: the prober flags
+/// six keyframes, only the first is an IDR, and none of them is followed by a
+/// picture shown earlier — so the leading-picture rule, which is what catches
+/// an open group of pictures, sees nothing wrong. Only asking what kind of
+/// picture it is answers this one.
+///
+/// The content matters as much as the encoding. A flat colour hides a picture
+/// decoded against references it does not have, which is exactly how this
+/// survived a suite that only ever cut colour bands.
+async fn no_idr_h264_fixture() -> PathBuf {
+    let path = workspace().join("no-idr-h264.mp4");
+    if path.exists() {
+        return path;
+    }
+
+    let tools = locator::tools().expect("FFmpeg must be installed to run these tests");
+    let args: Vec<String> = [
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=320x180:rate=30:duration=12",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-g",
+        "60",
+        "-keyint_min",
+        "60",
+        "-sc_threshold",
+        "0",
+        "-bf",
+        "0",
+        "-x264-params",
+        "intra-refresh=1",
+        "-pix_fmt",
+        "yuv420p",
+        &path.to_string_lossy(),
+    ]
+    .iter()
+    .map(|a| a.to_string())
+    .collect();
+
+    runner::run_capturing_stdout(&tools.ffmpeg, &args)
+        .await
+        .expect("the intra-refresh fixture could not be produced");
+
+    path
+}
+
+/// How far a frame's brightness may sit from the frame it should be, on
+/// average, before the picture is called wrong.
+///
+/// Measured rather than guessed: across a correct copy the mean difference
+/// stays at a tenth of a level, and across one whose pieces were decoded
+/// without their references it sits near six. Two is clear of both.
+const FRAME_DIFFERENCE: f64 = 2.0;
+
+/// How many frames of `produced` do not look like the matching frame of
+/// `expected`.
+///
+/// Counted per frame rather than averaged over the file, because this defect is
+/// local: a handful of ruined pictures at each seam vanishes into a mean and is
+/// the whole of what the viewer sees.
+///
+/// The two are subtracted and the difference is measured frame by frame, with
+/// the numbers coming back on standard output. `psnr` would say the same thing
+/// but only into a file, and a filter option is separated by a colon — which is
+/// also what a Windows path has after its drive letter, so the graph reads the
+/// path as `C` and writes the log nowhere.
+async fn frames_unlike(produced: &Path, expected: &Path) -> usize {
+    let tools = locator::tools().unwrap();
+    let args: Vec<String> = [
+        "-hide_banner",
+        "-nostdin",
+        "-v",
+        "error",
+        "-i",
+        &produced.to_string_lossy(),
+        "-i",
+        &expected.to_string_lossy(),
+        "-lavfi",
+        "[0:v][1:v]blend=all_mode=difference,signalstats,\
+         metadata=mode=print:key=lavfi.signalstats.YAVG:file=-",
+        "-f",
+        "null",
+        "-",
+    ]
+    .iter()
+    .map(|a| a.to_string())
+    .collect();
+
+    let printed = runner::run_capturing_stdout(&tools.ffmpeg, &args)
+        .await
+        .expect("the two files must be comparable");
+
+    let differences: Vec<f64> = printed
+        .lines()
+        .filter_map(|line| line.rsplit_once("YAVG="))
+        .filter_map(|(_, value)| value.trim().parse::<f64>().ok())
+        .collect();
+
+    assert!(!differences.is_empty(), "nothing was compared");
+    differences.iter().filter(|difference| **difference > FRAME_DIFFERENCE).count()
+}
+
+/// The frames of `source` between two frame numbers, written out losslessly
+/// enough to compare against.
+async fn frames_between(source: &Path, first: u64, last: u64, name: &str) -> PathBuf {
+    let output = workspace().join(name);
+    let _ = std::fs::remove_file(&output);
+
+    let tools = locator::tools().unwrap();
+    let args: Vec<String> = [
+        "-hide_banner",
+        "-nostdin",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        &source.to_string_lossy(),
+        "-vf",
+        &format!("select='between(n\\,{first}\\,{last})',setpts=N/FRAME_RATE/TB"),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "10",
+        "-pix_fmt",
+        "yuv420p",
+        "-fps_mode",
+        "passthrough",
+        &output.to_string_lossy(),
+    ]
+    .iter()
+    .map(|a| a.to_string())
+    .collect();
+
+    runner::run_capturing_stdout(&tools.ffmpeg, &args).await.expect("the reference frames");
+    output
+}
+
+/// The defect a user found: Copy produced grey frames with a band of rubble
+/// across the top, several times over.
+///
+/// The prober flags the start of every group as a keyframe, but only an IDR
+/// resets the reference lists and carries its parameter sets. A piece copied
+/// from a plain I-frame is decoded against pictures that are not in the file.
+/// Such a recording is re-encoded instead, and the export is right rather than
+/// fast.
+#[tokio::test]
+async fn an_open_gop_recording_is_never_stream_copied() {
+    let path = no_idr_h264_fixture().await;
+    let source = opened(&path).await;
+
+    // What the fix turns on. The fixture is written so this is false, and the
+    // assertion is as much about the fixture as about the reader.
+    let idr = keyframes::keyframes_are_idr(&path, "h264", source.duration.seconds())
+        .await
+        .expect("the sample must be readable");
+    assert!(!idr, "this fixture's groups start on plain I-frames, not IDRs");
+
+    let source = MediaSource { idr_keyframes: idr, ..source };
+    assert!(!source.supports_smart_cut(), "a copy cannot begin anywhere in this file");
+
+    // A cut between two of its keyframes, which is where a copy would have
+    // started a piece on a plain I-frame.
+    let edit = EditList::contiguous(vec![TimeRange::from_seconds(1.0, 6.0).unwrap()]).unwrap();
+    let (output, plan) = export_media_planned(
+        std::slice::from_ref(&source),
+        &edit,
+        ExportSpec::fast(),
+        "no-idr-copy.mp4",
+    )
+    .await;
+
+    assert!(plan.effective_mode.re_encodes(), "Copy has to give way rather than produce rubble");
+
+    // Frames 30 to 179 of the source, which is what [1.0, 6.0) is at 30 a second.
+    let expected = frames_between(&path, 30, 179, "no-idr-expected.mp4").await;
+    assert_eq!(frames_unlike(&output, &expected).await, 0, "every frame has to survive the cut");
+    assert_eq!(decode_errors(&output), "");
+}
+
+/// The other half of the same rule: an ordinary recording, whose groups do
+/// start on IDRs, still gets the fast path.
+#[tokio::test]
+async fn an_ordinary_recording_still_copies() {
+    let path = bframes_fixture().await;
+    let idr = keyframes::keyframes_are_idr(&path, "h264", 30.0)
+        .await
+        .expect("the sample must be readable");
+    assert!(idr, "x264 closes its groups by default, and every one starts on an IDR");
+
+    let source = opened(&path).await;
+    assert!(source.supports_smart_cut());
+
+    let edit = EditList::contiguous(vec![TimeRange::from_seconds(4.5, 10.0).unwrap()]).unwrap();
+    let (_, plan) = export_media_planned(
+        std::slice::from_ref(&source),
+        &edit,
+        ExportSpec::fast(),
+        "ordinary-copy.mp4",
+    )
+    .await;
+
+    // Keyframes every three seconds, so [4.5, 10.0) re-encodes 4.5 to 6.0 and
+    // 9.0 to 10.0 and copies the three seconds between them.
+    assert!(plan.re_encoded > 0.0, "an off-keyframe cut has frames to re-encode");
+    assert!(
+        plan.re_encoded < edit.duration() * 0.6,
+        "most of the clip has to be copied, got {} of {}",
+        plan.re_encoded,
+        edit.duration()
+    );
 }

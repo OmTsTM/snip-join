@@ -111,6 +111,9 @@ fn build_source(path: &Path, report: ProbeReport) -> AppResult<MediaSource> {
         video,
         audio,
         playability,
+        // Settled by `media_library::open`, which is where a second process may
+        // be spawned. Probing is one call and stays one call.
+        idr_keyframes: false,
     })
 }
 

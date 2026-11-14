@@ -82,8 +82,24 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
     if (state.keyframesTruncated[medium.path]) return false
     return (state.keyframes[medium.path]?.length ?? 0) > 0
   })
-  const copyImpossible = spansMedia || usesStill || (hasGaps && !smartCut)
-  const copyPossible = canCopyStreams(spec, hasGaps, spansMedia, usesStill, smartCut)
+  /**
+   * Whether a copy can begin where this edit's pieces begin.
+   *
+   * A copy resumes decoding from the picture it starts on, so that picture has
+   * to be one the file can be entered at. An open-GOP or intra-refresh
+   * recording offers none but its very first frame, and a piece started
+   * anywhere else comes out as rubble — which is what it did, quietly, until
+   * the file was asked what kind of pictures its cut points are.
+   */
+  const canStartCopy = useEditor((state) => {
+    if (state.source?.idrKeyframes) return true
+    const blocks = state.history.present.blocks
+    return blocks.length === 1 && (blocks[0]?.source.start ?? 1) <= 1e-6
+  })
+
+  const copyImpossible = spansMedia || usesStill || !canStartCopy || (hasGaps && !smartCut)
+  const copyPossible =
+    canStartCopy && canCopyStreams(spec, hasGaps, spansMedia, usesStill, smartCut)
 
   // How much a copy has to re-encode, for the estimate and the note under the
   // mode. In a memo rather than a selector: the result is a fresh object.
@@ -233,7 +249,9 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
                           ? t('export.mode.forcedByFiles')
                           : usesStill
                             ? t('export.mode.forcedByStill')
-                            : t('export.mode.forced')}
+                            : !canStartCopy
+                              ? t('export.mode.forcedByGop')
+                              : t('export.mode.forced')}
                       </p>
                     ) : (
                       spec.mode === 'fast' && <LosslessNote smartCut={smartCut} report={report} />

@@ -133,6 +133,7 @@ export const zh: Catalogue = {
   'export.mode.forced': '空缺无法复制，因此这次导出会重新编码。',
   'export.mode.forcedByFiles': '多个文件无法复制，因此这次导出会重新编码。',
   'export.mode.forcedByStill': '图片要在显示的整段时间里逐帧画出，因此这次导出会重新编码。',
+  'export.mode.forcedByGop': '这段录像只能从开头复制，因此这次导出会重新编码。',
 
   'export.lossless.exact': '切点精确，不做任何重新编码。',
   'export.lossless.partial': '切点精确。切点旁约 {time} 会重新编码，其余部分原样复制。',

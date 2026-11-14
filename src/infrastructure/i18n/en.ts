@@ -141,6 +141,7 @@ export const en = {
   'export.mode.forced': 'A hole cannot be copied, so this export re-encodes.',
   'export.mode.forcedByFiles': 'More than one file cannot be copied, so this export re-encodes.',
   'export.mode.forcedByStill': 'An image has to be drawn for as long as it is shown, so this export re-encodes.',
+  'export.mode.forcedByGop': 'This recording can only be copied from its very start, so this export re-encodes.',
 
   'export.lossless.exact': 'Exact cuts. Nothing is re-encoded.',
   'export.lossless.partial': 'Exact cuts. About {time} beside the cuts is re-encoded; the rest is copied untouched.',

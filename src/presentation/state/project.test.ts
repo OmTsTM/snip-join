@@ -36,6 +36,7 @@ function info(path: string, duration: number): MediaSourceInfo {
     },
     audio: null,
     playability: 'native',
+    idrKeyframes: true,
   }
 }
 

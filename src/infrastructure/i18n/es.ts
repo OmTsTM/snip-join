@@ -138,6 +138,7 @@ export const es: Catalogue = {
   'export.mode.forced': 'Un hueco no se puede copiar, así que esta exportación recodifica.',
   'export.mode.forcedByFiles': 'Más de un archivo no se puede copiar, así que esta exportación recodifica.',
   'export.mode.forcedByStill': 'Una imagen hay que dibujarla durante todo el tiempo que se ve, así que esta exportación recodifica.',
+  'export.mode.forcedByGop': 'Esta grabación solo puede copiarse desde el principio, así que esta exportación recodifica.',
 
   'export.lossless.exact': 'Cortes exactos. No se recodifica nada.',
   'export.lossless.partial': 'Cortes exactos. Unos {time} junto a los cortes se recodifican; el resto se copia sin cambios.',

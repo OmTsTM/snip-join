@@ -260,3 +260,149 @@ mod tests {
         assert!(keys.after(&keys.entries[2]).is_none());
     }
 }
+
+/// Whether a stream copy may begin at any of this file's keyframes.
+///
+/// `ffprobe` flags a packet as a keyframe for any picture a seek can land on,
+/// which for H.264 includes a plain I-frame and not only an IDR. The two are
+/// not interchangeable to a copy: an IDR resets the reference lists and carries
+/// its parameter sets, while a non-IDR I-frame does neither, so a piece that
+/// starts on one is decoded against pictures that are no longer in the file. It
+/// comes out as grey frames with a band of rubble across the top, which is
+/// exactly what an open-GOP or intra-refresh recording produced.
+///
+/// One packet is read, from a keyframe in the middle of the file rather than
+/// from its start, because the first frame of any file is an IDR and would
+/// answer yes for all of them. Encoders do not mix the two styles within one
+/// file, so a single sample settles it — and the sample costs one seek, not a
+/// pass over the video.
+pub async fn keyframes_are_idr(path: &Path, codec: &str, duration: f64) -> AppResult<bool> {
+    // Nothing to sample in a file too short to hold a second keyframe, and a
+    // copy of it can only begin at its first frame, which is always an IDR.
+    if duration < 1.0 {
+        return Ok(true);
+    }
+
+    let format = match codec {
+        "h264" => "h264",
+        "hevc" => "hevc",
+        // Only these two are ever stream copied piece by piece; anything else
+        // is answered without a process, and conservatively.
+        _ => return Ok(false),
+    };
+
+    let tools = locator::tools()?;
+    let args = vec![
+        "-hide_banner".into(),
+        "-nostdin".into(),
+        "-loglevel".into(),
+        "error".into(),
+        "-ss".into(),
+        format!("{:.6}", duration / 2.0),
+        "-i".into(),
+        path.to_string_lossy().into_owned(),
+        "-map".into(),
+        "0:v:0".into(),
+        "-c:v".into(),
+        "copy".into(),
+        "-frames:v".into(),
+        "1".into(),
+        // The raw muxer converts out of the container's length-prefixed form
+        // into the byte-stream one, which is where a NAL type can be read.
+        "-f".into(),
+        format.into(),
+        "pipe:1".into(),
+    ];
+
+    let bytes = runner::run_capturing_bytes(&tools.ffmpeg, &args).await?;
+    Ok(first_picture_is_irap(&bytes, format == "hevc"))
+}
+
+/// Reads the first coded picture's NAL type out of a byte stream.
+///
+/// H.264 numbers an IDR slice 5 and an ordinary one 1. HEVC gives the whole
+/// random-access family 16 to 23, which includes CRA: its leading pictures
+/// refer backwards, and those are stripped by the planner rather than being a
+/// reason to refuse the file.
+fn first_picture_is_irap(bytes: &[u8], hevc: bool) -> bool {
+    let mut index = 0;
+    while index + 4 < bytes.len() {
+        if bytes[index] != 0 || bytes[index + 1] != 0 || bytes[index + 2] != 1 {
+            index += 1;
+            continue;
+        }
+        let header = bytes[index + 3];
+        index += 3;
+
+        if hevc {
+            let kind = (header >> 1) & 0x3F;
+            // Anything below 32 is a coded picture; the rest is parameter sets
+            // and other non-picture data, which says nothing either way.
+            if kind < 32 {
+                return (16..=23).contains(&kind);
+            }
+        } else {
+            let kind = header & 0x1F;
+            if kind == 1 || kind == 5 {
+                return kind == 5;
+            }
+        }
+    }
+    // Nothing recognisable came back, so the file is not one to copy from.
+    false
+}
+
+#[cfg(test)]
+mod idr_tests {
+    use super::first_picture_is_irap;
+
+    fn nal(kind: u8) -> Vec<u8> {
+        vec![0, 0, 1, kind]
+    }
+
+    #[test]
+    fn an_h264_idr_slice_is_a_place_a_copy_may_begin() {
+        let mut stream = nal(7); // SPS
+        stream.extend(nal(8)); // PPS
+        stream.extend(nal(5)); // IDR
+        stream.extend([0u8; 8]);
+        assert!(first_picture_is_irap(&stream, false));
+    }
+
+    /// The defect: a plain I-frame is flagged as a keyframe by the prober and
+    /// is not a place a copy may begin.
+    #[test]
+    fn an_h264_non_idr_slice_is_not() {
+        let mut stream = nal(1);
+        stream.extend([0u8; 8]);
+        assert!(!first_picture_is_irap(&stream, false));
+    }
+
+    #[test]
+    fn parameter_sets_before_the_picture_are_stepped_over() {
+        let mut stream = nal(9); // access unit delimiter
+        stream.extend(nal(6)); // SEI
+        stream.extend(nal(1)); // an ordinary slice, which is the answer
+        stream.extend([0u8; 8]);
+        assert!(!first_picture_is_irap(&stream, false));
+    }
+
+    #[test]
+    fn hevc_random_access_pictures_are_accepted_and_trailing_ones_are_not() {
+        for kind in [16u8, 19, 20, 21] {
+            let mut stream = nal(32); // VPS
+            stream.extend(nal(kind << 1));
+            stream.extend([0u8; 8]);
+            assert!(first_picture_is_irap(&stream, true), "type {kind} is a random access point");
+        }
+        let mut trailing = nal(1 << 1);
+        trailing.extend([0u8; 8]);
+        assert!(!first_picture_is_irap(&trailing, true));
+    }
+
+    #[test]
+    fn an_empty_or_unreadable_stream_is_refused() {
+        assert!(!first_picture_is_irap(&[], false));
+        assert!(!first_picture_is_irap(&[0, 0, 0, 0, 0], false));
+    }
+}

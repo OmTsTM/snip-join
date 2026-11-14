@@ -2,13 +2,27 @@ use std::path::{Path, PathBuf};
 
 use crate::application::error::AppResult;
 use crate::domain::media::{MediaSource, Playability};
-use crate::infrastructure::ffmpeg::probe;
+use crate::infrastructure::ffmpeg::{keyframes, probe};
 use crate::infrastructure::paths;
 
 /// Validates a path and inspects the media behind it.
 pub async fn open(raw_path: &str) -> AppResult<MediaSource> {
     let path = paths::validate_input(raw_path)?;
-    probe::probe(&path).await
+    let mut source = probe::probe(&path).await?;
+
+    // Asked once, here, because it is a property of how the file was encoded
+    // and the answer decides whether an export may copy it at all. A still has
+    // nothing to seek into and no keyframes to judge.
+    source.idr_keyframes = match source.video.as_ref() {
+        Some(video) if !source.is_still() => {
+            keyframes::keyframes_are_idr(&path, &video.codec, source.duration.seconds())
+                .await
+                .unwrap_or(false)
+        }
+        _ => false,
+    };
+
+    Ok(source)
 }
 
 /// Where a scrubbing proxy for this source should live.
@@ -100,6 +114,7 @@ mod tests {
             }),
             audio: None,
             playability,
+            idr_keyframes: true,
         }
     }
 

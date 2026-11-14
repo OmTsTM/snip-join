@@ -138,6 +138,7 @@ export const ptBR: Catalogue = {
   'export.mode.forced': 'Um buraco não pode ser copiado, então esta exportação recodifica.',
   'export.mode.forcedByFiles': 'Mais de um arquivo não pode ser copiado, então esta exportação recodifica.',
   'export.mode.forcedByStill': 'Uma imagem precisa ser desenhada por todo o tempo em que aparece, então esta exportação recodifica.',
+  'export.mode.forcedByGop': 'Esta gravação só pode ser copiada a partir do começo, então esta exportação recodifica.',
 
   'export.lossless.exact': 'Cortes exatos. Nada é recodificado.',
   'export.lossless.partial': 'Cortes exatos. Cerca de {time} ao lado dos cortes é recodificado; o resto é copiado sem alteração.',
