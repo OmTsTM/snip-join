@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::Stdio;
 
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
+use tokio::process::{Child, Command};
 use tokio::sync::watch;
 
 use crate::application::error::{AppError, AppResult};
@@ -26,22 +26,122 @@ pub struct Progress {
     pub speed: f64,
 }
 
+/// How hard the system is asked to run a child process.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Priority {
+    /// Whatever the scheduler decides. Right for work the editor starts on its
+    /// own account, such as a scrubbing proxy, which must not take the processor
+    /// away from the window the user is working in.
+    Ordinary,
+    /// Work the user is sitting and waiting for: an export.
+    ///
+    /// Windows 11 decides how fast a process may run from whether its windows
+    /// are in front, and FFmpeg has none, so it inherits the verdict on the
+    /// editor. The moment the editor loses the focus the encoder is moved to
+    /// low quality of service — slower clocks, the efficiency cores on a hybrid
+    /// processor — and an export that ran at a steady pace crawls until the
+    /// window comes back. An export does not become less wanted because the
+    /// person waiting for it opened a browser, so this opts the process out of
+    /// that throttling and lifts it one step above ordinary work, which is what
+    /// keeps its pace when it is no longer the thing on screen.
+    ///
+    /// One step and not `HIGH_PRIORITY_CLASS`: an encoder saturates every core,
+    /// and at high priority the browser the user switched to would stutter
+    /// under it, which trades one complaint for another.
+    Export,
+}
+
 /// Builds a child process that never flashes a console window on Windows.
 ///
 /// Without `CREATE_NO_WINDOW` every FFmpeg invocation pops a black console for a
 /// few frames. With one process per thumbnail that is a visible strobe.
-fn spawn_command(program: &Path) -> Command {
+fn spawn_command(program: &Path, priority: Priority) -> Command {
     let mut command = Command::new(program);
     command.kill_on_drop(true);
 
     #[cfg(windows)]
     {
+        use windows_sys::Win32::System::Threading::ABOVE_NORMAL_PRIORITY_CLASS;
+
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.creation_flags(CREATE_NO_WINDOW);
+        // The priority class is a creation flag rather than a call after the
+        // spawn, so the process never runs a single instruction without it.
+        let class = match priority {
+            Priority::Ordinary => 0,
+            Priority::Export => ABOVE_NORMAL_PRIORITY_CLASS,
+        };
+        command.creation_flags(CREATE_NO_WINDOW | class);
     }
 
     command
 }
+
+/// Starts a tool with both output streams piped, at the given priority.
+fn spawn_piped(program: &Path, args: &[String], priority: Priority) -> AppResult<Child> {
+    let child = spawn_command(program, priority)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| AppError::Internal(format!("could not start FFmpeg: {e}")))?;
+
+    if priority == Priority::Export {
+        exempt_from_throttling(&child);
+    }
+
+    Ok(child)
+}
+
+/// Tells Windows never to apply EcoQoS to the process.
+///
+/// Throttling has no creation flag, so this runs on the handle straight after
+/// the spawn. Setting `EXECUTION_SPEED` in the control mask with the state left
+/// clear is the documented way to say "high quality of service, always", which
+/// overrides the heuristic that follows window focus; `IGNORE_TIMER_RESOLUTION`
+/// is cleared the same way so a backgrounded encoder keeps its timer requests.
+///
+/// A failure is logged and otherwise ignored: an export that runs at the
+/// ordinary pace is still an export, and older Windows 10 builds refuse the
+/// call outright.
+#[cfg(windows)]
+fn exempt_from_throttling(child: &Child) {
+    use windows_sys::Win32::System::Threading::{
+        ProcessPowerThrottling, SetProcessInformation, PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION,
+        PROCESS_POWER_THROTTLING_STATE,
+    };
+
+    let Some(handle) = child.raw_handle() else {
+        return;
+    };
+    let state = PROCESS_POWER_THROTTLING_STATE {
+        Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED
+            | PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION,
+        StateMask: 0,
+    };
+    // SAFETY: the handle belongs to a child this process spawned and still
+    // owns, so it is open and carries every access right; the pointer and the
+    // size describe one live, correctly laid out structure.
+    let applied = unsafe {
+        SetProcessInformation(
+            handle,
+            ProcessPowerThrottling,
+            std::ptr::from_ref(&state).cast(),
+            std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
+        )
+    };
+    if applied == 0 {
+        tracing::warn!(
+            error = %std::io::Error::last_os_error(),
+            "the export could not be exempted from power throttling"
+        );
+    }
+}
+
+#[cfg(not(windows))]
+fn exempt_from_throttling(_child: &Child) {}
 
 /// Runs a tool to completion and returns its stdout.
 ///
@@ -49,7 +149,7 @@ fn spawn_command(program: &Path) -> Command {
 /// vector and never interpolated into a shell string, so a file name containing
 /// quotes, semicolons or ampersands is inert.
 pub async fn run_capturing_stdout(program: &Path, args: &[String]) -> AppResult<String> {
-    let output = spawn_command(program)
+    let output = spawn_command(program, Priority::Ordinary)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -72,7 +172,7 @@ pub async fn run_capturing_stdout(program: &Path, args: &[String]) -> AppResult<
 /// binary; decoding it as UTF-8 would replace every invalid byte and corrupt the
 /// result beyond recovery.
 pub async fn run_capturing_bytes(program: &Path, args: &[String]) -> AppResult<Vec<u8>> {
-    let output = spawn_command(program)
+    let output = spawn_command(program, Priority::Ordinary)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -100,19 +200,14 @@ pub async fn run_capturing_bytes(program: &Path, args: &[String]) -> AppResult<V
 pub async fn run_with_progress<F>(
     program: &Path,
     args: &[String],
+    priority: Priority,
     mut cancel: watch::Receiver<bool>,
     mut on_progress: F,
 ) -> AppResult<Progress>
 where
     F: FnMut(Progress) + Send + 'static,
 {
-    let mut child = spawn_command(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| AppError::Internal(format!("could not start FFmpeg: {e}")))?;
+    let mut child = spawn_piped(program, args, priority)?;
 
     let stdout = child
         .stdout
@@ -259,6 +354,87 @@ mod tests {
         let mut progress = Progress { frame: 7, ..Progress::default() };
         apply_progress_field(&mut progress, "frame", "N/A");
         assert_eq!(progress.frame, 7);
+    }
+
+    /// Reads back what Windows recorded for a child: its priority class, and
+    /// the power throttling control and state masks.
+    #[cfg(windows)]
+    fn scheduling_of(child: &Child) -> (u32, u32, u32) {
+        use windows_sys::Win32::System::Threading::{
+            GetPriorityClass, GetProcessInformation, ProcessPowerThrottling,
+            PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_STATE,
+        };
+
+        let handle = child.raw_handle().expect("a running child has a handle");
+        let mut state = PROCESS_POWER_THROTTLING_STATE {
+            Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+            ..Default::default()
+        };
+        // SAFETY: the handle is the live child's own; the buffer is one
+        // structure of exactly the size passed.
+        let (class, read) = unsafe {
+            (
+                GetPriorityClass(handle),
+                GetProcessInformation(
+                    handle,
+                    ProcessPowerThrottling,
+                    std::ptr::from_mut(&mut state).cast(),
+                    std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
+                ),
+            )
+        };
+        assert_ne!(read, 0, "{}", std::io::Error::last_os_error());
+        (class, state.ControlMask, state.StateMask)
+    }
+
+    /// A child that stays alive long enough to be inspected and needs nothing
+    /// that a test machine might lack.
+    #[cfg(windows)]
+    fn idle_child(priority: Priority) -> Child {
+        let ping = Path::new(&std::env::var("SystemRoot").expect("SystemRoot is set"))
+            .join("System32")
+            .join("PING.EXE");
+        let args = ["-n", "30", "127.0.0.1"].map(String::from);
+        spawn_piped(&ping, &args, priority).expect("ping starts")
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn an_export_is_never_throttled_and_runs_above_ordinary_work() {
+        use windows_sys::Win32::System::Threading::{
+            ABOVE_NORMAL_PRIORITY_CLASS, PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+            PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION,
+        };
+
+        let mut child = idle_child(Priority::Export);
+        let (class, control, state) = scheduling_of(&child);
+        child.kill().await.ok();
+
+        assert_eq!(class, ABOVE_NORMAL_PRIORITY_CLASS);
+        // Taken under control with the state clear means "never throttle",
+        // which is different from both masks clear, "let Windows decide".
+        let both = PROCESS_POWER_THROTTLING_EXECUTION_SPEED
+            | PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION;
+        assert_eq!(control & both, both);
+        assert_eq!(state & both, 0);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn ordinary_work_is_left_to_the_scheduler() {
+        use windows_sys::Win32::System::Threading::{GetCurrentProcess, GetPriorityClass};
+
+        let mut child = idle_child(Priority::Ordinary);
+        let (class, control, _) = scheduling_of(&child);
+        child.kill().await.ok();
+
+        // Not NORMAL_PRIORITY_CLASS: a child that names no class inherits a
+        // below-normal one from its parent, which is what a test runner
+        // launched from a backgrounded shell often is.
+        // SAFETY: the pseudo-handle of the current process is always valid.
+        let parent = unsafe { GetPriorityClass(GetCurrentProcess()) };
+        assert_eq!(class, parent);
+        assert_eq!(control, 0);
     }
 
     #[test]

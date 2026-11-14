@@ -47,6 +47,12 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 dunce = "1"
 
+# Exempting an export's FFmpeg from the power throttling Windows applies to
+# whatever is not in front. Already in the tree through Tokio, so this costs no
+# build time; only the threading bindings are switched on.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_System_Threading"] }
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 

@@ -397,6 +397,17 @@ media falls back to the ordinary locations rather than failing every write.
   that ships with nothing. The third upscaling tier is libplacebo plus `cas`.
 - **`CREATE_NO_WINDOW` is mandatory on Windows.** One process per filmstrip frame
   means a visible console strobe without it.
+- **An export slows to a crawl the moment the editor leaves the screen** unless
+  its FFmpeg is told otherwise. Windows 11 grades a process's quality of service
+  by whether its windows are in front; FFmpeg has none, so once the editor loses
+  the focus the encoder is treated as background work — EcoQoS, lower clocks,
+  efficiency cores — and the bar barely moves while you read a browser.
+  `runner::Priority::Export` opts every export step out of power throttling
+  (`SetProcessInformation`, control mask set, state clear) and starts it at
+  `ABOVE_NORMAL_PRIORITY_CLASS`. Not higher: an encoder fills every core, and at
+  high priority the window the user switched to would stutter instead. The
+  scrubbing proxy and the thumbnails stay `Ordinary`, because they run while the
+  user is working in the editor and must not take the processor from it.
 - **A zustand selector must return a reference-stable value.** State is read
   through `useSyncExternalStore`, which compares snapshots by identity, so a
   selector that derives a fresh object or array on every call never compares
@@ -688,7 +699,7 @@ pnpm app:dev -- -- path/to/video.mp4   # open a file at launch
 pnpm typecheck          # tsc --build, strict, both projects
 pnpm test               # renderer unit tests
 pnpm i18n:check         # placeholder parity across locales, and dead keys
-cd src-tauri && cargo test              # 185 unit + 18 end-to-end
+cd src-tauri && cargo test              # 195 unit + 20 end-to-end
 cd src-tauri && cargo clippy --all-targets
 cd src-tauri && cargo fmt --all         # rustfmt.toml sits at the repo root
 pnpm ffmpeg:fetch       # download the FFmpeg that gets bundled

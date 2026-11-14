@@ -5,7 +5,8 @@ use tokio::sync::watch;
 use crate::application::error::{AppError, AppResult};
 use crate::application::export_plan::ExportPlan;
 
-use super::ffmpeg::{locator, runner};
+use super::ffmpeg::locator;
+use super::ffmpeg::runner::{self, Priority};
 
 /// Removes a scratch directory when it goes out of scope.
 ///
@@ -66,12 +67,17 @@ where
         let base = completed_weight;
         let mut report = on_progress.clone();
 
-        let last =
-            runner::run_with_progress(&tools.ffmpeg, &step.args, cancel.clone(), move |progress| {
+        let last = runner::run_with_progress(
+            &tools.ffmpeg,
+            &step.args,
+            Priority::Export,
+            cancel.clone(),
+            move |progress| {
                 let within_step = (progress.out_time / span).clamp(0.0, 1.0);
                 report(((base + within_step * weight) / total_weight).clamp(0.0, 1.0));
-            })
-            .await?;
+            },
+        )
+        .await?;
 
         // A step that ends cleanly having written nothing is a failure FFmpeg
         // does not report as one: a hardware encoder handed an input too short
@@ -107,7 +113,7 @@ where
     let tools = locator::tools()?;
     let span = total_duration.max(f64::EPSILON);
 
-    runner::run_with_progress(&tools.ffmpeg, args, cancel, move |progress| {
+    runner::run_with_progress(&tools.ffmpeg, args, Priority::Ordinary, cancel, move |progress| {
         on_progress((progress.out_time / span).clamp(0.0, 1.0));
     })
     .await
